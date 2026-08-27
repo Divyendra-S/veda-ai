@@ -1,4 +1,5 @@
 import { createBrowserClient } from "@supabase/ssr";
+import type { Database } from "@/lib/supabase/database.types";
 import { publicEnv } from "@/lib/env";
 
 /**
@@ -9,7 +10,7 @@ import { publicEnv } from "@/lib/env";
  * multi-megabyte payloads out of our serverless functions entirely.
  */
 export function createBrowserSupabase() {
-  return createBrowserClient(
+  return createBrowserClient<Database>(
     publicEnv.supabaseUrl,
     publicEnv.supabasePublishableKey,
   );

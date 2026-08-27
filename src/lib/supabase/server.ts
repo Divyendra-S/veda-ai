@@ -1,5 +1,6 @@
 import "server-only";
 import { createClient } from "@supabase/supabase-js";
+import type { Database } from "@/lib/supabase/database.types";
 import { publicEnv, serverEnv } from "@/lib/env";
 
 /**
@@ -12,7 +13,7 @@ import { publicEnv, serverEnv } from "@/lib/env";
  * There is no session to carry, so the cookie plumbing would be dead code.
  */
 export function createServerSupabase() {
-  return createClient(publicEnv.supabaseUrl, serverEnv.supabaseSecretKey, {
+  return createClient<Database>(publicEnv.supabaseUrl, serverEnv.supabaseSecretKey, {
     auth: { persistSession: false },
   });
 }
