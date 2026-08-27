@@ -42,3 +42,8 @@ next-env.d.ts
 
 # keep the template, ignore real env files
 !.env.example
+
+# Local MCP server wiring for Claude Code. Not app config, and it names the
+# Supabase project ref — public by design, but it belongs on the machine that
+# uses it rather than in the repo.
+.mcp.json
