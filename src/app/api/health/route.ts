@@ -9,7 +9,7 @@ export async function GET() {
   const env = envStatus();
   const checks: Record<string, { ok: boolean; detail?: string }> = {};
 
-  if (env.NEXT_PUBLIC_SUPABASE_URL && env.SUPABASE_SERVICE_ROLE_KEY) {
+  if (env.NEXT_PUBLIC_SUPABASE_URL && env.SUPABASE_SECRET_KEY) {
     try {
       const supabase = createServerSupabase();
       const { error } = await supabase.storage.listBuckets();

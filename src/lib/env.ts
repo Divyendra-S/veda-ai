@@ -4,6 +4,10 @@
  * Validated lazily rather than at module load: the app must still boot (and
  * render a useful error) when a key is missing, instead of the whole route
  * tree failing to import.
+ *
+ * Uses Supabase's current API key system — a publishable key (sb_publishable_…)
+ * in place of the legacy anon key, and a secret key (sb_secret_…) in place of
+ * service_role.
  */
 
 function required(name: string, value: string | undefined): string {
@@ -19,11 +23,9 @@ export const serverEnv = {
   get geminiApiKey() {
     return required("GEMINI_API_KEY", process.env.GEMINI_API_KEY);
   },
-  get supabaseServiceRoleKey() {
-    return required(
-      "SUPABASE_SERVICE_ROLE_KEY",
-      process.env.SUPABASE_SERVICE_ROLE_KEY,
-    );
+  /** Bypasses row-level security. Server-side only, never sent to the browser. */
+  get supabaseSecretKey() {
+    return required("SUPABASE_SECRET_KEY", process.env.SUPABASE_SECRET_KEY);
   },
 };
 
@@ -36,10 +38,10 @@ export const publicEnv = {
       process.env.NEXT_PUBLIC_SUPABASE_URL,
     );
   },
-  get supabaseAnonKey() {
+  get supabasePublishableKey() {
     return required(
-      "NEXT_PUBLIC_SUPABASE_ANON_KEY",
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+      "NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY",
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     );
   },
 };
@@ -49,9 +51,9 @@ export function envStatus() {
   return {
     GEMINI_API_KEY: Boolean(process.env.GEMINI_API_KEY),
     NEXT_PUBLIC_SUPABASE_URL: Boolean(process.env.NEXT_PUBLIC_SUPABASE_URL),
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: Boolean(
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
+    NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: Boolean(
+      process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY,
     ),
-    SUPABASE_SERVICE_ROLE_KEY: Boolean(process.env.SUPABASE_SERVICE_ROLE_KEY),
+    SUPABASE_SECRET_KEY: Boolean(process.env.SUPABASE_SECRET_KEY),
   };
 }

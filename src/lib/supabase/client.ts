@@ -1,9 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
+import { createBrowserClient } from "@supabase/ssr";
 import { publicEnv } from "@/lib/env";
 
-/** Browser client. Anon key only — used for uploading page images to Storage. */
+/**
+ * Browser client. Publishable key only — row-level security gates every query,
+ * so this is safe to ship in the client bundle.
+ *
+ * Used for uploading rasterized page images straight to Storage, which keeps
+ * multi-megabyte payloads out of our serverless functions entirely.
+ */
 export function createBrowserSupabase() {
-  return createClient(publicEnv.supabaseUrl, publicEnv.supabaseAnonKey, {
-    auth: { persistSession: false },
-  });
+  return createBrowserClient(
+    publicEnv.supabaseUrl,
+    publicEnv.supabasePublishableKey,
+  );
 }
