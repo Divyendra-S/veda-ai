@@ -162,7 +162,11 @@ export type AdvanceResult = {
 
 export async function advanceExam(
   examId: string,
-  { deadline, signal }: { deadline: number; signal?: AbortSignal },
+  {
+    deadline,
+    signal,
+    retry = false,
+  }: { deadline: number; signal?: AbortSignal; retry?: boolean },
 ): Promise<AdvanceResult> {
   const supabase = createServerSupabase();
   const exam = await loadExam(supabase, examId);
@@ -172,11 +176,19 @@ export async function advanceExam(
     return { done: true, stage: "done", status: exam.status };
   }
   if (exam.status === "error") {
-    return { done: true, stage: exam.stage, status: "error" };
+    // A failed run is terminal until someone asks for it again. `retry` is
+    // that ask, and it resumes from the stage that failed rather than from the
+    // beginning: every step replaces its own output, so the steps that already
+    // finished stay finished and nothing is re-uploaded or re-extracted.
+    if (!retry) return { done: true, stage: exam.stage, status: "error" };
+    await patchExam(supabase, examId, { status: "running", error: null });
   }
   // Two tabs, or a client that retried while the first call was still working.
   // Reporting `busy` lets the caller keep polling instead of running the same
   // extraction twice and paying for it twice.
+  // Deliberately not applied to the retry above: an errored exam has no live
+  // invocation to collide with, so a lease left behind by the run that failed
+  // must not be able to refuse the retry that follows it.
   if (
     exam.status === "running" &&
     Date.now() - Date.parse(exam.updatedAt) < LEASE_MS

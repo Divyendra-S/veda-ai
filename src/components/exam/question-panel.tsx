@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { ChevronDown } from "lucide-react";
+import { useRef, useState, type KeyboardEvent } from "react";
+import { ChevronDown, Inbox } from "lucide-react";
 import { cn } from "@/lib/cn";
 import { QuestionRow } from "@/components/exam/question-row";
 import type {
@@ -26,16 +26,63 @@ export function QuestionPanel({
   summary,
   selectedKey,
   onSelect,
+  className,
 }: {
   model: ReviewModel;
   summary: ExamSummary | null;
   selectedKey: string | null;
   onSelect: (target: Target, region: PlacedRegion | null) => void;
+  className?: string;
 }) {
   // Only questions expand; an unplaceable block has nothing hidden to reveal.
   const keys = model.rows.map((row) => row.target.key);
   const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
   const allExpanded = keys.length > 0 && keys.every((key) => expanded.has(key));
+  const list = useRef<HTMLDivElement>(null);
+
+  const nothingMatched =
+    model.unmatched.length === 0 &&
+    model.rows.length > 0 &&
+    model.rows.every((row) => row.target.regions.length === 0);
+
+  /**
+   * Arrow keys walk the register.
+   *
+   * Every row stays in the tab order rather than becoming a roving-tabindex
+   * listbox: the rows are buttons and each carries a second button beside it,
+   * which a listbox cannot contain. So this is an accelerator over the native
+   * behaviour, not a replacement for it — Tab still reaches everything, and
+   * Enter on a row still selects it.
+   */
+  const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    const step =
+      event.key === "ArrowDown"
+        ? 1
+        : event.key === "ArrowUp"
+          ? -1
+          : event.key === "Home"
+            ? -Infinity
+            : event.key === "End"
+              ? Infinity
+              : 0;
+    if (!step || !list.current) return;
+
+    const rows = Array.from(
+      list.current.querySelectorAll<HTMLButtonElement>("[data-row]"),
+    );
+    if (rows.length === 0) return;
+
+    const here = rows.findIndex((row) => row.contains(document.activeElement));
+    const next =
+      step === -Infinity
+        ? 0
+        : step === Infinity
+          ? rows.length - 1
+          : Math.min(rows.length - 1, Math.max(0, (here < 0 ? 0 : here) + step));
+
+    event.preventDefault();
+    rows[next].focus();
+  };
 
   const toggle = (key: string) =>
     setExpanded((current) => {
@@ -50,12 +97,19 @@ export function QuestionPanel({
   };
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col rounded-panel bg-panel shadow-card">
+    <section
+      className={cn(
+        "flex min-w-0 flex-1 flex-col rounded-panel bg-panel shadow-card",
+        className,
+      )}
+    >
       <header className="shrink-0 px-4 pt-4 pb-3">
         <div className="flex items-center gap-3">
           <h1 className="mr-auto min-w-0 text-[16px] font-semibold text-ink">
             Extracted Questions{" "}
-            <span className="font-normal text-muted">(from question paper)</span>
+            <span className="font-normal text-muted max-sm:hidden">
+              (from question paper)
+            </span>
           </h1>
           <button
             type="button"
@@ -71,8 +125,23 @@ export function QuestionPanel({
         {summary ? <SummaryStrip summary={summary} /> : null}
       </header>
 
-      <div className="scrollbar-slim flex-1 overflow-y-auto px-4 pb-4">
+      <div
+        ref={list}
+        onKeyDown={onKeyDown}
+        className="scrollbar-slim flex-1 overflow-y-auto px-4 pb-4"
+      >
         {summary ? <OverallFeedback summary={summary} /> : null}
+
+        {nothingMatched ? (
+          <p className="mb-3 flex items-start gap-2.5 rounded-card bg-surface px-3.5 py-3 text-[13px] leading-relaxed text-muted shadow-card">
+            <Inbox className="mt-0.5 size-4 shrink-0 text-faint" strokeWidth={2} />
+            <span>
+              Nothing on the answer sheet was matched to this paper. Every
+              question below is recorded as not attempted — which is what a
+              blank or unreadable sheet looks like from here.
+            </span>
+          </p>
+        ) : null}
 
         <ol className="flex flex-col gap-3">
           {model.rows.map((row) => (
@@ -247,10 +316,11 @@ function UnmatchedRow({
     >
       <button
         type="button"
+        data-row
         onClick={onSelect}
         aria-pressed={selected}
         aria-label={`Unplaceable answer ${target.tag}`}
-        className="flex w-full cursor-pointer items-center gap-3 p-3 text-left"
+        className="flex w-full cursor-pointer items-center gap-3 rounded-card p-3 text-left outline-offset-2 focus-visible:outline-2 focus-visible:outline-brand"
       >
         <span className="grid size-8 shrink-0 place-items-center rounded-full bg-warn-bg text-[12px] font-semibold text-warn">
           {target.tag.slice(0, 4)}

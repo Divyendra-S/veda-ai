@@ -43,10 +43,12 @@ export function AnswerSheetPanel({
   pages,
   target,
   focus,
+  className,
 }: {
   pages: SignedPage[];
   target: Target | null;
   focus: Focus | null;
+  className?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pageRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -115,12 +117,28 @@ export function AnswerSheetPanel({
     });
   };
 
-  const missing = target && target.regions.length === 0;
+  // Three things the viewer can be saying, and only ever one of them: nothing
+  // is selected yet, the selected question was never attempted, or a box is on
+  // screen and needs no words at all.
+  const notice =
+    target && target.regions.length === 0 ? (
+      <>
+        <span className="font-semibold text-white">{target.tag}</span> was not
+        attempted — there is nothing on the sheet to highlight.
+      </>
+    ) : target ? null : (
+      "Select a question to highlight its answer here."
+    );
 
   return (
-    <section className="flex min-w-0 flex-1 flex-col rounded-panel bg-viewer shadow-card">
+    <section
+      className={cn(
+        "flex min-w-0 flex-1 flex-col rounded-panel bg-viewer shadow-card",
+        className,
+      )}
+    >
       <header className="shrink-0 px-4 py-3">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
           <h2 className="mr-auto truncate text-[16px] font-semibold text-white">
             Answer Sheet
           </h2>
@@ -147,7 +165,12 @@ export function AnswerSheetPanel({
             </ViewerButton>
           </div>
 
-          <div className="flex shrink-0 items-center gap-0.5 rounded-full bg-viewer-raised p-1">
+          <div
+            className={cn(
+              "flex shrink-0 items-center gap-0.5 rounded-full bg-viewer-raised p-1",
+              pages.length === 0 && "hidden",
+            )}
+          >
             <ViewerButton
               label="Previous page"
               disabled={page === 0}
@@ -171,10 +194,9 @@ export function AnswerSheetPanel({
           </div>
         </div>
 
-        {missing ? (
+        {notice ? (
           <p className="mt-2.5 rounded-[12px] bg-white/8 px-3.5 py-2.5 text-[13px] text-white/70">
-            <span className="font-semibold text-white">{target.tag}</span> was
-            not attempted — there is nothing on the sheet to highlight.
+            {notice}
           </p>
         ) : null}
       </header>
@@ -184,6 +206,12 @@ export function AnswerSheetPanel({
         onScroll={onScroll}
         className="scrollbar-slim-dark flex-1 overflow-auto px-4 pb-4"
       >
+        {pages.length === 0 ? (
+          <p className="grid h-full place-items-center text-[14px] text-white/50">
+            This answer sheet has no pages.
+          </p>
+        ) : null}
+
         <div className="flex justify-center-safe">
           <div
             className="flex shrink-0 flex-col gap-3"
@@ -198,14 +226,28 @@ export function AnswerSheetPanel({
                 data-page={sheet.index}
                 className="relative"
               >
-                <Image
-                  src={sheet.url}
-                  alt={`Answer sheet page ${sheet.index + 1}`}
-                  width={sheet.width}
-                  height={sheet.height}
-                  unoptimized
-                  className="w-full rounded-[10px] bg-white"
-                />
+                {sheet.url ? (
+                  <Image
+                    src={sheet.url}
+                    alt={`Answer sheet page ${sheet.index + 1}`}
+                    width={sheet.width}
+                    height={sheet.height}
+                    unoptimized
+                    className="w-full rounded-[10px] bg-white"
+                  />
+                ) : (
+                  // The slot stays, at the page's own proportions, so the page
+                  // numbering below it and any box drawn on it still line up.
+                  <div
+                    role="img"
+                    aria-label={`Answer sheet page ${sheet.index + 1} could not be loaded`}
+                    style={{ aspectRatio: `${sheet.width} / ${sheet.height}` }}
+                    className="grid w-full place-items-center rounded-[10px] border border-dashed border-white/20 bg-white/5 px-6 text-center text-[13px] leading-relaxed text-white/50"
+                  >
+                    Page {sheet.index + 1} could not be loaded. It never
+                    finished uploading, so there is nothing to highlight on it.
+                  </div>
+                )}
 
                 {(target?.regions ?? [])
                   .filter((region) => region.pageIndex === sheet.index)
@@ -262,7 +304,7 @@ function ViewerButton({
       aria-label={label}
       disabled={disabled}
       onClick={onClick}
-      className="grid size-6 cursor-pointer place-items-center rounded-full text-white transition-colors hover:bg-white/15 disabled:cursor-default disabled:text-white/30 disabled:hover:bg-transparent"
+      className="grid size-6 cursor-pointer place-items-center rounded-full text-white outline-offset-2 transition-colors hover:bg-white/15 focus-visible:outline-2 focus-visible:outline-white disabled:cursor-default disabled:text-white/30 disabled:hover:bg-transparent"
     >
       {children}
     </button>

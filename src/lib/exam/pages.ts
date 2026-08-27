@@ -71,9 +71,15 @@ export async function signPages(
     data.map((entry) => [entry.path ?? "", entry.signedUrl]),
   );
 
-  return pages.map((page) => {
-    const url = urlByPath.get(page.path);
-    if (!url) throw new Error(`Could not sign ${page.path}.`);
-    return { index: page.index, url, width: page.width, height: page.height };
-  });
+  // A page that cannot be signed keeps its slot with a null URL rather than
+  // taking the whole exam down. An upload that failed on page 3 of 4 still
+  // leaves a full question register, three readable pages and every highlight
+  // on them — and the viewer can say which page is missing, which is more
+  // than a 500 on the way in can.
+  return pages.map((page) => ({
+    index: page.index,
+    url: urlByPath.get(page.path) ?? null,
+    width: page.width,
+    height: page.height,
+  }));
 }

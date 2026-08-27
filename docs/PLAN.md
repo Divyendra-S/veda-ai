@@ -4,8 +4,8 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phases 0–7 complete**, except Phase 0's live URL, which is Phase 9's job.
-Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 7 next.**
+Status: **Phases 0–8 complete**, except Phase 0's live URL, which is Phase 9's job.
+Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 9 next.**
 
 ---
 
@@ -578,15 +578,131 @@ Re-measured against `Question - Answer mapping screen.png` and corrected in `glo
 
 ---
 
-## Phase 8 — Edge cases, resilience & polish
+## Phase 8 — Edge cases, resilience & polish ✅
 
-- The `Extracting… / This may take a while` screen wired to real stage reporting
-- Error states: upload failure, extraction failure, partial results, rate-limit stall
-- Retry a failed stage without re-uploading
-- Empty and zero states
-- Keyboard nav through the question list; focus management on highlight jump
-- Responsive down to laptop; the viewer degrades to a tab switch on narrow screens
-- Mobile-safe fallback rather than a broken two-pane layout
+Everything that is not the happy path.
+
+- ✅ `Extracting… / This may take a while` wired to real stage reporting, with a
+  determinate bar reading the exam row's own `progress`
+- ✅ Error states: upload failure, extraction failure, **partial results**, rate-limit stall
+- ✅ Retry a failed stage without re-uploading — `POST /run?retry=1`
+- ✅ Empty and zero states: nothing selected, nothing matched, a page that never uploaded
+- ✅ Keyboard nav through the register (↑ ↓ Home End), and the highlight jump announced
+- ✅ Responsive down to laptop; below 64rem the viewer becomes a tab beside the questions
+- ✅ Mobile-safe at 390px rather than a broken two-pane layout
+
+**Done when:** the failure and edge states behave, in a browser. — **met.** The Phase 7
+harness is extended with three things it did not have: viewport emulation, key events, and
+a CDP `Fetch` interceptor that rewrites the snapshot on its way to the browser. That last
+one is what makes the bad-day states reachable at all — a run that died at grading, a
+sheet nothing was read from, a page image that never uploaded — without corrupting real
+data or spending a single model call.
+
+Forty-seven checks, all passing:
+
+| checked | how |
+| --- | --- |
+| the viewer's zero state | before any click: no boxes, and the panel says what to do |
+| arrow keys walk the register | ↓↓ from row 1 lands on row 3; End reaches the unplaceable block; Home returns; Enter selects |
+| the jump is announced | the live region reads `Q6 highlighted on page 2, region 1 of 2.` |
+| an unanswered question is announced as such | `Q4 was not attempted. There is nothing on the answer sheet to highlight.` |
+| one pane at 900px | a tab switch appears, the sidebar is 64px, selecting a question switches to the sheet and scrolls the box into view |
+| nothing scrolls sideways | `scrollWidth - clientWidth <= 0` at 900px and at 390px, on both screens |
+| the drop cards survive a phone | stacked, 184px tall, contents inside their own bounds, CTA reachable |
+| the progress bar tells the truth | `aria-valuenow` 55 and a fill drawn at 55% of the track |
+| a long wait explains itself | after 45s the rate-limit note appears; before it, nothing |
+| a run that died at grading | the register still renders, the banner names the step and what survived, the pills read `—` not `0` |
+| a sheet nothing was read from | the panel says so, clicking a row draws nothing, the viewer says why |
+| a page that never uploaded | that page says so in its own slot, the page count is unchanged, the rest still highlights |
+| retry actually resumes | `updated_at` unchanged after a plain call, moved after `?retry=1`, stage back at `questions` — read from Postgres, not from the API |
+| and the button does the same | clicking **Try again** moves `updated_at` too |
+
+### The finding: retry did not retry
+
+`advanceExam` opened with a guard that returned `{ done: true, status: "error" }` for any
+exam already in error — correct for the polling loop, which must not resurrect a hopeless
+run on its own and burn quota doing it. But the **Try again** button went through the same
+endpoint. It posted, the server said "still failed", the mutation resolved, and the screen
+did not move. The button had never worked, and nothing in the code looked wrong.
+
+The fix separates the two callers rather than relaxing the guard: `?retry=1` is the one way
+a failed exam starts moving again, the flag rides only on the *first* call of an attempt,
+and the lease check is deliberately skipped for it — an errored exam has no live invocation
+to collide with, so a lease left behind by the run that failed must not be able to refuse
+the retry that follows it.
+
+Proving it needed a genuinely broken exam, so the check makes one: an exam row whose page
+images were never uploaded. The question step dies on the first page download, before any
+model call, so it costs nothing. `updated_at` is then the witness — the API does not expose
+it, so the check reads the row straight from Postgres.
+
+### The second finding: `flex-1` on the wrong axis
+
+The two drop cards stack on a phone, which took `flex-col sm:flex-row` on the well. The
+stacking check passed. The screenshot showed both cards collapsed to a sliver with their
+upload icons and `Max 10MB` labels spilling over the page beneath them.
+
+`flex-1` is `flex: 1 1 0%`, and in a column it resolves against the **height**: `basis: 0`
+beat the card's own `h-[184px]`, and the card's contents are `absolute inset-0`, so there
+was no content left to hold it open either. The card is now `min-h-[184px] w-full` with the
+grow deferred to `sm:flex-1`, where it is the width that grows — which is what was wanted
+in the first place.
+
+The check now measures the card's height and asserts its label's rect sits inside the
+card's. The same lesson as Phase 7's zoom: a layout assertion that only looks at position
+passes happily through a collapse.
+
+### Decisions taken during the phase
+
+- **A failed run does not mean an empty screen.** Each step persists before the next
+  starts, so a run that died at grading still has a full register, real answers and working
+  highlights. Throwing that away for one error message would be both a worse screen and a
+  dishonest one: what failed goes in a banner over what survived, and the banner names
+  which. Only a failure with nothing behind it gets the whole panel.
+- **A page that cannot be signed keeps its slot.** `signPages` used to throw, which turned
+  one missing object into a 500 on the way in and an exam nobody could open. It now returns
+  `url: null` for that page and the viewer draws a placeholder at the page's own
+  proportions — so numbering, paging and every other page's highlights survive one failed
+  upload, and the missing page says what happened to it.
+- **A snapshot that will not load says so.** The previous code fell through to `Opening…`
+  whenever `exam` was undefined, which meant a 404 or a 500 rendered as a spinner that
+  never resolved. That path now offers a re-read rather than a retry, because there is no
+  run to resume.
+- **Transient faults are absorbed, definite ones are not.** The client tolerates three
+  consecutive transient failures with a widening backoff — a cold function, a dropped
+  connection, a 502 in front of the region all come right on the next call. A 404 stops
+  immediately. A fetch that never reached the server has no status at all, and that counts
+  as transient, which is exactly the case worth retrying.
+- **Arrow keys are an accelerator, not a listbox.** Every row stays in the tab order rather
+  than becoming a roving-tabindex listbox, because each row carries a second button beside
+  it and a listbox option cannot contain one. Tab still reaches everything; ↑ ↓ Home End
+  are added on top.
+- **The highlight is announced, because it is not visible to everyone.** The box appears in
+  a panel a screen-reader user is not looking at and has no announcement of its own, so
+  selection writes a line into a live region: which tag, which page, which region of how
+  many — or that the question was never attempted.
+- **The rail below 64rem is not a preference.** The variant matches on the viewport there
+  instead of on the stored attribute, so the attribute keeps meaning exactly what the
+  teacher chose and the width decides for as long as it is narrow. The expand toggle is
+  scoped `lg:rail:` so it is not offered where it would do nothing — stacked variants
+  rather than a `max-lg:hidden` racing a same-specificity rule for source order.
+- **Both panes stay mounted on one screen.** The hidden one is `display: none`, so the
+  viewer keeps its scroll position and zoom across a switch, and the box a highlight
+  scrolls to already exists in the DOM by the time the pane becomes visible.
+
+### Limitations worth stating
+
+- **The bad-day states were verified against a rewritten payload, not a real bad day.** The
+  components, the derivation and the layout are the real ones and the payload shapes are
+  ones the pipeline can genuinely produce — but a real 429 storm at grading was not induced.
+- **The retry check proves resumption, not recovery.** Its throwaway exam fails again on
+  every attempt, by design. What is asserted is that the pipeline re-enters at the failed
+  step; that a retry can *succeed* is shown by Phase 6's mid-pipeline rewind, not here.
+- **Three viewports.** 1600x1000, 900x900 and 390x844. Everything between them is
+  interpolation, and the only hard breakpoints are 40rem and 64rem.
+- **`confidence` is stored but not shown.** §8 of `ARCHITECTURE.md` lists low-confidence
+  handwriting as flagged in the UI; it is recorded on every answer block and nothing on
+  screen reads it yet.
 
 ---
 

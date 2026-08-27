@@ -17,7 +17,7 @@ export function AppShell({
   section?: string;
 }) {
   return (
-    <div className="flex h-dvh gap-4 p-(--spacing-shell)">
+    <div className="flex h-dvh gap-2 p-2 sm:gap-4 sm:p-(--spacing-shell)">
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <Topbar section={section} />

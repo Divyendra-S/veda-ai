@@ -213,10 +213,10 @@ Serverless functions time out. A multi-page extraction will not reliably finish 
 invocation, so the pipeline is **resumable and step-based**.
 
 ```
-POST /api/exams              -> create exam row, return id
-POST /api/exams/[id]/run     -> advance the pipeline; maxDuration = 300
-GET  /api/exams/[id]         -> current status + partial results (React Query polls this)
-GET  /api/exams/[id]/result  -> full result once complete
+POST /api/exams               -> create exam row, return id
+POST /api/exams/[id]/run      -> advance the pipeline; maxDuration = 300
+POST /api/exams/[id]/run?retry=1 -> the same, but resume an exam already in error
+GET  /api/exams/[id]          -> current status + partial results (React Query polls this)
 ```
 
 `run` processes steps until the pipeline is done **or** ~240s have elapsed, then returns
@@ -238,8 +238,23 @@ because that is the path a resumed run always takes, so it is the path worth exe
 every run. Mapping skips its model call entirely when the sheet came back blank — every
 question is then unanswered, which grading already handles without asking anyone.
 
+A failed exam is terminal for the polling loop: `run` returns `{ done: true, status:
+"error" }` and does not restart, so a client that keeps calling cannot resurrect a hopeless
+extraction and burn quota doing it. `?retry=1` is the single exception, and it is a teacher
+pressing a button. It clears the error, resumes at the stage that failed — every step
+replaces its own output, so the steps that finished stay finished and nothing is uploaded
+again — and it deliberately skips the lease check, because an errored exam has no live
+invocation to collide with and a lease left by the run that failed must not refuse the
+retry that follows it.
+
+The client's own loop absorbs three consecutive *transient* faults with a widening backoff
+(a cold function, a dropped connection, a 502 in front of the region) and stops at the
+first definite one. A fetch that never reached the server has no status, and that counts as
+transient.
+
 Progress is written to the exam row as it happens, so the polling `GET` always reflects real
-state — the loading screen reports actual stage and page counts, not a fake animation.
+state — the loading screen reports actual stage and page counts and draws a determinate bar
+from `progress`, not a fake animation.
 
 Chosen over SSE deliberately: streaming gives smoother progress but dies with the connection,
 and the recovery path ends up being polling anyway. One mechanism, no fallback to maintain.
@@ -307,6 +322,21 @@ no resize observer. Zoom is therefore only the width of the column the pages sit
 transform and emphatically not the CSS `zoom` property, which cancels against percentage
 widths and silently magnifies nothing (`PLAN.md` Phase 7).
 
+**Below 64rem** the two panes become one, with a tab switch above them, and selecting a
+question moves you to the sheet — otherwise the highlight is drawn on a panel nobody can
+see. Both panels stay mounted and the hidden one is only `display: none`, so the viewer
+keeps its scroll and zoom and the box a highlight scrolls to already exists by the time the
+pane appears. The sidebar is forced to its rail at the same width, by the `rail:` variant
+matching on the viewport rather than on the stored attribute, so the attribute keeps
+meaning exactly what the teacher chose.
+
+**A failed run does not empty the screen.** What survived renders and a banner names what
+did not, because the steps persist independently: a run that died at grading still has a
+full register, real answers and working highlights. Only a failure with nothing behind it
+takes the whole panel. Selection also writes a line into a live region — which tag, which
+page, which region of how many, or that the question was never attempted — because the box
+appears in a panel a screen-reader user is not looking at.
+
 ---
 
 ## 8. Failure modes and how they surface
@@ -319,6 +349,11 @@ widths and silently magnifies nothing (`PLAN.md` Phase 7).
 | Question extracted with no answer | `unanswered` — a first-class state, not an error |
 | Answer matching no question | `unmatched` — shown to the teacher, never dropped |
 | Serverless timeout | Step runner returns `done: false`; client re-invokes and resumes |
+| A step that failed outright | The exam is terminal for the polling loop. `POST /run?retry=1` — the **Try again** button — clears the error and resumes at that step; nothing is re-uploaded and no finished step is redone |
+| A stage failing with earlier stages done | Partial results render and a banner names the failed step and what survived. Ungraded questions show `—`, not `0` |
+| Transient fault between the client and the run route | Three consecutive ones are absorbed with a widening backoff; the first definite status stops the run |
+| A page image that never finished uploading | `signPages` returns `url: null` for that page rather than throwing. The page keeps its slot at its own proportions, the numbering and every other page's highlights survive, and the placeholder says what happened |
+| The snapshot itself failing to load | An explicit panel offering a re-read, not a spinner that never resolves |
 | Corrupt / encrypted PDF | Caught during client-side rasterization, before any spend |
 | Box under-covers the answer | Every box is padded vertically before it is stored, because a highlight that clips reads as broken while one that over-covers reads as fine. Measured, not assumed — see Phase 5 in `PLAN.md` |
 | Marks above the question's total | Clamped to the total and rounded to a half, and the adjustment is handed back to the model in the tool result — a mark over the total usually means it has the wrong question, which it can only notice if it is told |

@@ -115,10 +115,14 @@ export type ExamSummary = {
 };
 
 /** A page with a read URL minted for it. `width`/`height` travel with the URL
- *  because an overlay is positioned against the bitmap, not the viewport. */
+ *  because an overlay is positioned against the bitmap, not the viewport.
+ *
+ *  `url` is null when the object is not in the bucket — an upload that failed
+ *  partway. The page stays in the list so numbering, paging and every other
+ *  page's highlights survive one missing bitmap. */
 export type SignedPage = {
   index: number;
-  url: string;
+  url: string | null;
   width: number;
   height: number;
 };

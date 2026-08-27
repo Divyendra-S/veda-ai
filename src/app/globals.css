@@ -160,8 +160,24 @@ body {
 /*
  * Sidebar collapse is driven by a data attribute on <html>, set by an inline
  * script before first paint. The markup for both states is always present and
- * identical between server and client — only these variants decide what shows —
+ * identical between server and client — only this variant decides what shows —
  * so there is neither a flash nor a hydration mismatch.
+ *
+ * Below 64rem the rail stops being a preference. The review screen needs that
+ * 304px more than the nav needs its labels, and a media query is the only way
+ * to say so without a second source of truth: the attribute keeps meaning
+ * exactly what the teacher chose, and the viewport overrides it for as long as
+ * it is narrow. The toggle hides itself there rather than sitting dead.
  */
-@custom-variant rail (html[data-sidebar="collapsed"] &);
-@custom-variant wide (html[data-sidebar="expanded"] &);
+@custom-variant rail {
+  @media (width >= 64rem) {
+    html[data-sidebar="collapsed"] & {
+      @slot;
+    }
+  }
+  @media (width < 64rem) {
+    & {
+      @slot;
+    }
+  }
+}

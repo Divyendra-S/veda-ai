@@ -9,11 +9,31 @@ export type AdvanceResponse = {
   busy?: boolean;
 };
 
+/**
+ * Carries the status code, because the caller's decision to retry depends on
+ * it: a 502 from a cold serverless function is worth another go, a 404 for an
+ * exam that does not exist never will be.
+ */
+export class HttpError extends Error {
+  constructor(
+    message: string,
+    readonly status: number,
+  ) {
+    super(message);
+    this.name = "HttpError";
+  }
+
+  /** True for the faults that are worth waiting out rather than reporting. */
+  get transient() {
+    return this.status === 408 || this.status === 429 || this.status >= 500;
+  }
+}
+
 async function readError(response: Response, fallback: string) {
   const body = (await response.json().catch(() => null)) as {
     error?: string;
   } | null;
-  return new Error(body?.error ?? fallback);
+  return new HttpError(body?.error ?? fallback, response.status);
 }
 
 export async function fetchExam(
@@ -27,12 +47,12 @@ export async function fetchExam(
 
 export async function advanceExam(
   id: string,
-  signal?: AbortSignal,
+  { retry, signal }: { retry?: boolean; signal?: AbortSignal } = {},
 ): Promise<AdvanceResponse> {
-  const response = await fetch(`/api/exams/${id}/run`, {
-    method: "POST",
-    signal,
-  });
+  const response = await fetch(
+    `/api/exams/${id}/run${retry ? "?retry=1" : ""}`,
+    { method: "POST", signal },
+  );
   if (!response.ok) throw await readError(response, "Extraction failed.");
   return response.json();
 }

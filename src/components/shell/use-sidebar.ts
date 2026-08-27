@@ -30,8 +30,9 @@ function getServerSnapshot() {
 
 /**
  * The *visual* state lives in the `data-sidebar` attribute on <html> and is
- * styled through the `rail:` / `wide:` variants, so React never renders two
- * different trees and there is nothing to mismatch on hydration.
+ * styled through the `rail:` variant, so React never renders two different
+ * trees and there is nothing to mismatch on hydration. Below 64rem that
+ * variant matches on the viewport instead and the toggle is not offered.
  *
  * This hook subscribes to that attribute purely so the toggle can report
  * `aria-expanded` honestly. useSyncExternalStore is the right primitive here

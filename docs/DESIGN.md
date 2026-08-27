@@ -153,3 +153,34 @@ on cards, `12` on nav rows.
 - **Blocks that match no question get a section of their own** below the register, and
   highlight exactly as a question does. Also absent from the export, and the case most
   likely to be wrong — so it is the one thing that must not be quietly dropped.
+- **The processing screen gains a determinate bar.** The export shows the sparkle, the
+  title and `This may take a while` and nothing else. The brief asks for processing
+  progress and the exam row already carries a real `progress` figure, so the bar reads it
+  rather than animating. After 45 seconds a line appears explaining that the free tier
+  paces model calls — the wait is real, and an unexplained one reads as a hang.
+- **A failed run keeps its screen.** What survived renders under a banner naming the step
+  that failed. The exports have no error state at all; the alternative — one message where
+  a complete register used to be — throws away work the pipeline had already persisted.
+
+---
+
+## Narrow screens
+
+The exports are one 1440px frame. Two breakpoints carry everything below it.
+
+| Width | What changes |
+| --- | --- |
+| `< 64rem` (1024) | The two review panes become one, with a tab switch above them. The sidebar is forced to its rail and stops offering a toggle. |
+| `< 40rem` (640) | The two drop cards stack. Headline drops 38 → 26px, the hero 126 → 92px, the shell inset 12 → 8px. The topbar's teacher name and the question panel's `(from question paper)` drop out. |
+
+Three decisions inside that:
+
+- **The rail below 64rem is not the teacher's stored preference.** The `rail:` variant
+  matches on the viewport there instead of on `data-sidebar`, so the attribute keeps
+  meaning exactly what they chose and the width decides for as long as it is narrow.
+- **Selecting a question on one pane takes you to the sheet**, because otherwise the
+  highlight is drawn on a panel nobody can see. The switch goes back and the viewer has
+  kept its place: the hidden pane is only `display: none`.
+- **The drop cards are `min-h` with the grow deferred to `sm:`.** `flex-1` in a column
+  resolves against the height, where `basis: 0` beats a fixed `h-[184px]` and collapses
+  both cards to nothing — see `PLAN.md` Phase 8.

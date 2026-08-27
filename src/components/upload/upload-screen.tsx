@@ -4,7 +4,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { ArrowRight } from "lucide-react";
+import { AlertTriangle, ArrowRight } from "lucide-react";
 import hero from "@/assets/brand/hero-teacher.png";
 import { ProcessingPanel } from "@/components/processing-panel";
 import { Button } from "@/components/ui/button";
@@ -93,6 +93,7 @@ export function UploadScreen() {
     return (
       <ProcessingPanel
         title={STAGE_TITLES[stage]}
+        progress={progress ? percentOf(progress) : 0}
         detail={
           progress && progress.total > 1
             ? `${progress.done} of ${progress.total} pages`
@@ -107,14 +108,14 @@ export function UploadScreen() {
   );
 
   return (
-    <section className="flex flex-1 flex-col items-center justify-center py-6">
-      <h1 className="flex flex-wrap items-center justify-center gap-x-3 text-center text-[38px] leading-none font-bold tracking-[-0.02em] text-ink">
+    <section className="scrollbar-slim flex flex-1 flex-col items-center justify-center-safe overflow-y-auto px-2 py-6">
+      <h1 className="flex flex-wrap items-center justify-center gap-x-3 gap-y-1 text-center text-[26px] leading-none font-bold tracking-[-0.02em] text-ink sm:text-[38px]">
         <span>Upload</span>
         <span className="rounded-xl bg-brand-wash px-3 py-2.5 text-brand">
           Question Paper &amp; Answer Sheets
         </span>
       </h1>
-      <p className="mt-3.5 text-[20px] text-ink-soft">
+      <p className="mt-3.5 text-center text-[17px] text-ink-soft sm:text-[20px]">
         Upload both files to get started
       </p>
 
@@ -122,10 +123,10 @@ export function UploadScreen() {
         src={hero}
         alt=""
         priority
-        className="mt-8 size-[126px] object-contain"
+        className="mt-6 size-[92px] object-contain sm:mt-8 sm:size-[126px]"
       />
 
-      <div className="mt-7 flex w-full max-w-[785px] gap-4 rounded-panel bg-well p-2">
+      <div className="mt-6 flex w-full max-w-[785px] flex-col gap-3 rounded-panel bg-well p-2 sm:mt-7 sm:flex-row sm:gap-4">
         <DropCard
           title="Question Paper"
           value={selections.question}
@@ -149,7 +150,7 @@ export function UploadScreen() {
       </div>
 
       <Button
-        className="mt-11"
+        className="mt-8 sm:mt-11"
         disabled={!ready}
         onClick={() => submit.mutate()}
       >
@@ -157,11 +158,36 @@ export function UploadScreen() {
         <ArrowRight className="size-[18px]" strokeWidth={2.2} />
       </Button>
 
-      <p className="mt-4 text-[13px] text-faint">
-        {submit.isError
-          ? (submit.error as Error).message
-          : "Once both files are uploaded, you'll be able to map answers with questions"}
-      </p>
+      {submit.isError ? (
+        <p
+          role="alert"
+          className="mt-4 flex max-w-[520px] items-start gap-2 rounded-[14px] bg-fail-bg px-4 py-2.5 text-[13px] leading-relaxed text-fail"
+        >
+          <AlertTriangle className="mt-0.5 size-4 shrink-0" strokeWidth={2.2} />
+          <span>
+            {(submit.error as Error).message} Both files are still selected —
+            press Start Mapping to try again.
+          </span>
+        </p>
+      ) : (
+        <p className="mt-4 px-2 text-center text-[13px] text-faint">
+          Once both files are uploaded, you&apos;ll be able to map answers with
+          questions
+        </p>
+      )}
     </section>
   );
+}
+
+/**
+ * One bar for three stages of unequal length. Rasterizing is the slow half on
+ * a scanned paper and uploading is the slow half on a poor connection, so the
+ * split is roughly even rather than proportional to the step count — a bar
+ * that sprints to 90% and then stops is worse than no bar.
+ */
+function percentOf(progress: SubmitProgress): number {
+  const ratio = progress.total > 0 ? progress.done / progress.total : 0;
+  if (progress.stage === "rasterizing") return ratio * 50;
+  if (progress.stage === "creating") return 52;
+  return 55 + ratio * 45;
 }

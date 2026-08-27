@@ -53,10 +53,11 @@ export function QuestionRow({
       <div className="flex items-center gap-3 p-3">
         <button
           type="button"
+          data-row
           onClick={onSelect}
           aria-pressed={selected}
           aria-label={`Question ${question.number}`}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-[10px] text-left outline-offset-4"
+          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-[10px] text-left outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand"
         >
           <span
             className={cn(
@@ -86,7 +87,7 @@ export function QuestionRow({
           aria-expanded={expanded}
           aria-controls={bodyId}
           aria-label={`${expanded ? "Hide" : "Show"} feedback for question ${question.number}`}
-          className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-[10px] bg-inset text-muted transition-colors hover:bg-subtle hover:text-ink"
+          className="grid size-8 shrink-0 cursor-pointer place-items-center rounded-[10px] bg-inset text-muted transition-colors outline-offset-2 hover:bg-subtle hover:text-ink focus-visible:outline-2 focus-visible:outline-brand"
         >
           <ChevronDown
             className={cn(

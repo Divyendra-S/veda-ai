@@ -45,7 +45,13 @@ export function DropCard({
       onDragLeave={() => setDragging(false)}
       onDrop={handleDrop}
       className={cn(
-        "relative flex h-[184px] flex-1 items-center justify-center rounded-[20px]",
+        // `min-h` with the grow deferred to `sm:`, not `h-[184px] flex-1`.
+        // Below `sm` the well is a column, where `flex-1` resolves against the
+        // *height*: basis-0 wins over a fixed height and both cards collapse to
+        // nothing, with their absolutely-positioned labels left spilling over
+        // the ruins. In a row it is the width that grows, which is what was
+        // wanted in the first place.
+        "relative flex min-h-[184px] w-full items-center justify-center rounded-[20px] sm:w-auto sm:flex-1",
         "border-2 border-dashed bg-surface p-5 transition-colors",
         dragging ? "border-brand bg-brand-wash/40" : "border-line",
         error && "border-fail",

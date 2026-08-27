@@ -97,7 +97,12 @@ export function Sidebar() {
           onClick={toggle}
           aria-expanded={!collapsed}
           aria-label="Expand sidebar"
-          className="mx-auto hidden size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-ink rail:grid"
+          // `lg:rail:` rather than `rail:`: below 64rem the rail is forced by
+          // the viewport, so an expand button there would be a control that
+          // does nothing. Stacking the breakpoint outside the variant is what
+          // decides it, rather than the order two same-specificity rules
+          // happen to land in.
+          className="mx-auto hidden size-9 place-items-center rounded-lg text-muted transition-colors hover:bg-subtle hover:text-ink lg:rail:grid"
         >
           <ChevronsRight className="size-5" strokeWidth={2} />
         </button>

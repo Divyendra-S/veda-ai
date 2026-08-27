@@ -16,17 +16,25 @@ const RESERVE_MS = 45_000;
  * Advances the pipeline one invocation's worth. Returning `{ done: false }`
  * is a normal outcome, not an error: the client immediately calls again and
  * the run picks up at the step it left off.
+ *
+ * `?retry=1` is the one way an exam that has already failed starts moving
+ * again. It is a query flag rather than the default because a failed run must
+ * stay failed for every poll that follows it — otherwise the client's own
+ * retry loop would restart a hopeless extraction on its own and burn quota
+ * doing it.
  */
 export async function POST(
   request: NextRequest,
   ctx: RouteContext<"/api/exams/[id]/run">,
 ) {
   const { id } = await ctx.params;
+  const retry = request.nextUrl.searchParams.get("retry") === "1";
 
   try {
     const result = await advanceExam(id, {
       deadline: Date.now() + (maxDuration * 1000 - RESERVE_MS),
       signal: request.signal,
+      retry,
     });
     return NextResponse.json(result);
   } catch (error) {
