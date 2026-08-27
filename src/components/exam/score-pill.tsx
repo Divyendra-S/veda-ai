@@ -49,8 +49,9 @@ export function ScorePill({
           : `${formatMarks(grading.marksAwarded)} out of ${formatMarks(grading.maxMarks)} marks`
       }
     >
+      {/* `2 / 2`, spaced, which is how both frames set it. */}
       <span aria-hidden>
-        {formatMarks(grading.marksAwarded)}/{formatMarks(grading.maxMarks)}
+        {formatMarks(grading.marksAwarded)} / {formatMarks(grading.maxMarks)}
       </span>
     </span>
   );

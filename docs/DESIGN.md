@@ -5,6 +5,12 @@ with ImageMagick for the four desktop frames, and by scanning pixel rows through
 canvas for the phone frame that arrived later. The tokens live in
 `src/app/globals.css` under `@theme`.
 
+Some of it now comes from the Figma file itself. Read access arrived late and is
+rationed — twenty calls a month — so the nodes were spent on the things pixels are
+worst at: the typeface, and the two controls whose every value turned out to be a
+guess (the toolkit pill, the phone pane switch). Six calls used, and where a node and
+an export disagree the reason is written down beside the value.
+
 | Export | Screen |
 | --- | --- |
 | `Upload Screen - Empty State.png` | Page 1, nothing uploaded, sidebar expanded |
@@ -56,7 +62,7 @@ Sampled values, with the job each one does.
 
 | Token | Value | Used for |
 | --- | --- | --- |
-| `ink` | `#2b2b2b` | Headings, the toolkit pill background |
+| `ink` | `#303030` | Headings, the selected pane tab, the answer-sheet viewer |
 | `ink-soft` | `#3b3b3b` | Body copy |
 | `muted` | `#7e7e7e` | Nav labels, secondary copy |
 | `faint` | `#a6a6a6` | `Max 10MB`, disabled label |
@@ -65,6 +71,7 @@ Sampled values, with the job each one does.
 | `subtle` | `#f0f0f0` | Active nav row, school card |
 | `well` | `#f5f4f4` | The container the two drop zones sit in |
 | `panel` | `#f3f3f3` | Question-list panel behind the cards |
+| `toolkit` | `#272727` | The AI Teacher's Toolkit pill, a shade below `ink` |
 | `inset` | `#f6f6f6` | Feedback well, chevron button, page chips |
 | `badge` | `#555555` | The round question-number badge |
 | `line` | `#cecece` | Dashed drop-zone border, disabled CTA fill |
@@ -78,6 +85,14 @@ disagree with what the earlier screens suggested: `panel` was recorded as `#e8e8
 the feedback well was assumed to be `subtle`, the number badge was assumed to be `ink`,
 and the pill backgrounds were a shade too light. The values above are the corrected
 ones; `docs/PLAN.md` Phase 7 keeps the before-and-after.
+
+`panel` is also the one value where the two frames genuinely disagree rather than one
+of them being misread. Clean spots inside the desktop panel — away from cards, whose
+shadows reach a good 30px — sample `#f3f3f3`, `#f5f5f5`, `#f1f1f1`. The phone frame
+settles at `#e7e7e7` everywhere, including mid-panel between the header and the first
+card where nothing is casting on it. The desktop reading stays, because it is the
+frame the token was measured from and the frame it is mostly seen in; the phone is a
+shade darker than the design there and knowingly so.
 
 **Score-pill scale** — pill background / text, sampled off the pills themselves:
 
@@ -93,6 +108,8 @@ So green at 80% or above, red at zero, amber in between — which is the design'
 and not grading's, where 4/5 is a `partial` verdict. The fourth row is ours: the export
 has no example of a question nobody attempted, and painting a blank page red reads as
 marks thrown away rather than marks never attempted.
+
+The pill spaces its slash — `2 / 2`, not `2/2` — in both frames.
 
 **Page background** is a fixed vertical gradient, not flat:
 
@@ -172,6 +189,9 @@ left, and at 18px on that pill the difference reads.
   (the orange border) is separate from expansion.
 - The viewer scrolls continuously through pages; `Page 1 of 4` is a position readout,
   not a pager. Page 2 is visible immediately below page 1 in the export.
+- `Extracted Questions (from question paper)` is one weight and one colour in both
+  frames. It had been set with the parenthetical dropped to a muted regular, which is
+  a reasonable-looking guess and simply is not what either export draws.
 
 ---
 
@@ -239,9 +259,54 @@ breakpoints carry everything between and below them.
 | Width | What changes |
 | --- | --- |
 | `< 64rem` (1024) | The two review panes become one, with a tab switch above them. The sidebar is forced to its rail and stops offering a toggle. |
-| `< 40rem` (640) | The sidebar goes entirely; the brand moves into the topbar and a hamburger opens it as a drawer. The question row rearranges. The two drop cards stack. Headline drops 38 → 26px, the hero 139 → 101px. The topbar loses the teacher's name, the breadcrumb, Help and the assistant button; the question panel loses `Expand All`. |
+| `< 40rem` (640) | The sidebar goes entirely; the brand moves into the topbar and a hamburger opens it as a drawer. The question row rearranges. The two drop cards stack. Headline drops 38 → 26px, the hero 139 → 101px. The topbar loses the teacher's name, the breadcrumb, Help and the assistant button; the question panel loses `Expand All`, centres its heading and halves its side padding. |
 
-Six decisions inside that:
+### The pane switch
+
+Node `3:1477` on the phone frame, and the first phone control read from the file
+rather than inferred. Every number in it had been guessed low:
+
+| Property | Was | Design |
+| --- | --- | --- |
+| Track | white, `shadow-card`, 4px pad, 4px gap | `#f6f6f6` (`inset`), 4px pad, **no gap** — see below |
+| Track height | 45 | **54** |
+| Tab | 37 tall, 14px label | **46** tall, **16px** at 1.4 |
+| Selected tab | `ink`, no stroke | `ink` with a **1px `#7b7b7b`** stroke and two shadows |
+| Unselected label | `muted` | **`ink`** |
+| Contents | icon + label + count chip | **label only** |
+
+Three of those are decisions rather than transcription. The icons went because the
+design has none and two glyphs on a 393px screen cost the labels the room they need;
+the count chip went with them, since selecting a question already brings this pane
+forward, and a chip that only ever says what just happened is noise on the one
+control the whole phone layout leans on.
+
+And the track stayed **white** rather than taking the node's `#f6f6f6`. The export
+sets that track against a background reading `#cecece`, because it is a 2227px scroll
+capture and the page gradient is compressed into it. On a real 852px phone the same
+gradient is only about a tenth of the way down by the time it reaches here — roughly
+`#f4f4f4` — so `#f6f6f6` left the control with no edge at all, which is the opposite
+of what the frame shows. White reproduces the separation the design is drawing; the
+literal hex would not.
+
+The stroke rides as `inset 0 0 0 1px` rather than a `border`, because a border is
+inside the box and would push the tab past the 46px the frame measures — Figma's
+strokes do not take part in its auto-layout. And the track carries `z-10`: the
+selected tab's `0 32px 48px` shadow really does fall about 40px onto the question
+panel below, which a later sibling with a background of its own would paint over.
+Both profiles were checked against the export afterwards — across the 34px of track
+to the right of the selected tab, the rendered falloff differs from the design's by a
+mean of **0.6 levels of grey**.
+
+### The phone topbar
+
+Node `3:1462`, same frame. 56px tall and `pl-12 pr-16`, with a bare `arrow_back` at
+24px — no disc. The white disc the desktop bar puts around it is right up there,
+where it is how the design chromes Help and the assistant, so it stays behind `sm:`.
+The mark is 28px, the wordmark 20px at -6%, the avatar 32, and every icon 24 — all
+of them a size up from the desktop bar, which is what a thumb wants anyway.
+
+Seven decisions inside that:
 
 - **The rail below 64rem is not the teacher's stored preference.** The `rail:` variant
   matches on the viewport there instead of on `data-sidebar`, so the attribute keeps
@@ -266,6 +331,10 @@ Six decisions inside that:
   it but Exams is inert, so the design spends it on the panes instead. The drawer the
   hamburger opens is the same set of items, with the same ones disabled, because the
   point of it is to be the sidebar rather than a second, smaller idea of one.
+- **The drawer is the sidebar's metrics, not a size down from them.** Width, padding,
+  section rhythm, row height, type and school card are all the sidebar's, and it
+  scrolls — at 320x568 that content is about 90px taller than the drawer, and clipping
+  is the one way this fails silently, with Settings and the school card simply absent.
 - **The drop cards are `min-h` with the grow deferred to `sm:`.** `flex-1` in a column
   resolves against the height, where `basis: 0` beats a fixed `h-[184px]` and collapses
   both cards to nothing — see `PLAN.md` Phase 8.

@@ -11,7 +11,10 @@ import { SparkleMark } from "@/components/brand/sparkle-mark";
 import { NAV_ITEMS, type NavItem } from "@/components/shell/nav-items";
 import { cn } from "@/lib/cn";
 
-const ROW = "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px]";
+/** The sidebar's row, verbatim, minus the rail variants a drawer has no use
+ *  for. Kept in step deliberately: see the note on the component below. */
+const ROW =
+  "flex h-10 items-center gap-2 rounded-lg px-3 text-[16px] transition-colors";
 
 /**
  * The nav, for the width where the rail is gone.
@@ -22,6 +25,13 @@ const ROW = "flex h-11 items-center gap-3 rounded-xl px-3 text-[15px]";
  * something you ask for. What opens is the same set of items the sidebar shows,
  * with the same ones inert, because the point of the drawer is to be the
  * sidebar rather than a second, smaller idea of one.
+ *
+ * Which is why every metric here is the sidebar's and not a smaller idea of
+ * those either — the same 304px width, padding, section rhythm, row height,
+ * type sizes and school card. It had drifted a size down across the board while
+ * the sidebar was being corrected against the design node; a drawer that is
+ * visibly a different component the moment you open it fails at the one job the
+ * comment above gives it.
  */
 export function MobileNav({
   open,
@@ -63,11 +73,16 @@ export function MobileNav({
         role="dialog"
         aria-modal="true"
         aria-label="Menu"
-        className="absolute inset-y-2 left-2 flex w-[272px] flex-col rounded-shell bg-surface px-5 pt-5 pb-5 shadow-card"
+        // `overflow-y-auto` because a short phone is a real phone: at 320x568
+        // the sidebar's own rhythm is about 90px taller than the drawer, and
+        // clipped is the one way that can fail silently — the school card and
+        // Settings would simply not be there. `mt-auto` on the footer still
+        // does its job whenever there is room.
+        className="scrollbar-slim absolute inset-y-2 left-2 flex w-(--spacing-sidebar) max-w-[calc(100vw-64px)] flex-col overflow-y-auto rounded-shell bg-surface px-6 pt-6 pb-6 shadow-card"
       >
         <div className="flex items-center gap-2.5">
           <LogoMark className="size-10" />
-          <span className="text-[21px] font-bold tracking-[-0.02em] text-ink">
+          <span className="text-[28px] leading-5 font-bold tracking-[-0.06em] text-ink">
             VedaAI
           </span>
           <button
@@ -82,13 +97,13 @@ export function MobileNav({
 
         <button
           type="button"
-          className="mt-7 flex h-[42px] items-center justify-center gap-2.5 rounded-full border-4 border-brand-ring bg-toolkit text-[16px] font-medium text-white shadow-[inset_0_-1px_3.5px_rgba(177,177,177,0.6),inset_0_0_24px_rgba(255,255,255,0.22)]"
+          className="mt-14 flex h-[42px] items-center justify-center gap-2.5 rounded-full border-4 border-brand-ring bg-toolkit text-[16px] font-medium text-white shadow-[inset_0_-1px_3.5px_rgba(177,177,177,0.6),inset_0_0_24px_rgba(255,255,255,0.22)]"
         >
           <SparkleMark />
           AI Teacher’s Toolkit
         </button>
 
-        <nav className="mt-7 flex flex-col gap-1.5">
+        <nav className="mt-14 flex flex-col gap-2">
           {NAV_ITEMS.map((item) => (
             <Row
               key={item.label}
@@ -99,28 +114,28 @@ export function MobileNav({
           ))}
         </nav>
 
-        <div className="mt-auto flex flex-col gap-3 pt-8">
+        <div className="mt-auto flex flex-col gap-2 pt-8">
           <button
             type="button"
             disabled
             title="Not part of this prototype"
             className={cn(ROW, "text-muted disabled:cursor-default")}
           >
-            <Settings className="size-[22px] shrink-0" strokeWidth={1.8} />
+            <Settings className="size-5 shrink-0" strokeWidth={1.8} />
             <span>Settings</span>
           </button>
 
-          <div className="flex items-center gap-2.5 rounded-2xl bg-subtle p-3">
+          <div className="flex items-center gap-2 rounded-2xl bg-subtle p-3">
             <Image
               src={crest}
               alt=""
-              className="size-11 shrink-0 object-contain"
+              className="h-[60px] w-[59px] shrink-0 object-contain"
             />
             <span className="min-w-0">
-              <span className="block truncate text-[15px] font-semibold text-ink">
+              <span className="block truncate text-[16px] font-bold text-ink">
                 Delhi Public School
               </span>
-              <span className="block truncate text-[13px] text-muted">
+              <span className="block truncate text-[14px] text-muted">
                 Bokaro Steel City
               </span>
             </span>
@@ -143,7 +158,7 @@ function Row({
   const Icon = item.icon;
   const content = (
     <>
-      <Icon className="size-[22px] shrink-0" strokeWidth={1.8} />
+      <Icon className="size-5 shrink-0" strokeWidth={1.8} />
       <span>{item.label}</span>
     </>
   );

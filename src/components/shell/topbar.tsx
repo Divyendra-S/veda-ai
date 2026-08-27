@@ -25,23 +25,25 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
   const [menu, setMenu] = useState(false);
 
   return (
-    <header className="flex h-(--spacing-topbar) shrink-0 items-center gap-2.5 rounded-shell bg-raised px-3.5 shadow-card sm:gap-3 sm:px-5">
+    <header className="flex h-(--spacing-topbar) shrink-0 items-center gap-2 rounded-shell bg-raised pl-3 pr-4 shadow-card sm:gap-3 sm:px-5">
       <button
         type="button"
         onClick={() => router.back()}
         aria-label="Go back"
-        className="grid size-9 shrink-0 place-items-center rounded-full border border-black/8 bg-white text-ink transition-colors hover:bg-subtle"
+        className="grid size-9 shrink-0 cursor-pointer place-items-center rounded-full text-ink transition-colors hover:bg-subtle sm:border sm:border-black/8 sm:bg-white"
       >
-        <ArrowLeft className="size-[18px]" strokeWidth={2} />
+        <ArrowLeft className="size-6 sm:size-[18px]" strokeWidth={2} />
       </button>
 
       {/* The phone frame swaps the breadcrumb for the brand, because with no
           sidebar beside it the topbar is the only place the app says its own
           name. From `sm` up the sidebar carries the brand and this goes back to
-          saying where you are. */}
+          saying where you are. Its metrics are the node's: a 28px mark, the
+          wordmark at 20px and -6%, and 24px icons throughout — bigger glyphs
+          than the desktop bar carries, which is right for a thumb. */}
       <span className="flex min-w-0 items-center gap-2 sm:hidden">
-        <LogoMark className="size-9 shrink-0" />
-        <span className="truncate text-[19px] font-bold tracking-[-0.02em] text-ink">
+        <LogoMark className="size-7 shrink-0" />
+        <span className="truncate text-[20px] font-bold tracking-[-0.06em] text-ink">
           VedaAI
         </span>
       </span>
@@ -51,14 +53,14 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
         <span className="truncate">{section}</span>
       </span>
 
-      <div className="ml-auto flex shrink-0 items-center gap-1.5">
+      <div className="ml-auto flex shrink-0 items-center gap-3 sm:gap-1.5">
         <IconButton label="Help" className="hidden sm:grid">
           <HelpCircle className="size-[19px]" strokeWidth={1.8} />
         </IconButton>
 
         <IconButton label="Notifications">
           <span className="relative">
-            <Bell className="size-[19px]" strokeWidth={1.8} />
+            <Bell className="size-6 sm:size-[19px]" strokeWidth={1.8} />
             <span className="absolute -top-0.5 -right-0.5 size-2 rounded-full bg-brand ring-2 ring-raised" />
           </span>
         </IconButton>
@@ -73,12 +75,12 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
 
         <button
           type="button"
-          className="ml-1.5 flex items-center gap-2 rounded-full text-left"
+          className="flex items-center gap-2 rounded-full text-left sm:ml-1.5"
         >
           <Image
             src={avatar}
             alt=""
-            className="size-7 shrink-0 rounded-full object-cover"
+            className="size-8 shrink-0 rounded-full object-cover sm:size-7"
           />
           <span className="hidden text-[15px] font-medium text-ink sm:block">
             {TEACHER}
@@ -94,9 +96,9 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
           onClick={() => setMenu(true)}
           aria-label="Open menu"
           aria-expanded={menu}
-          className="ml-0.5 grid size-9 cursor-pointer place-items-center rounded-full text-ink transition-colors hover:bg-subtle sm:hidden"
+          className="grid size-9 cursor-pointer place-items-center rounded-full text-ink transition-colors hover:bg-subtle sm:hidden"
         >
-          <Menu className="size-[21px]" strokeWidth={2} />
+          <Menu className="size-6" strokeWidth={2} />
         </button>
       </div>
 

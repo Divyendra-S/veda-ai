@@ -103,15 +103,21 @@ export function QuestionPanel({
         className,
       )}
     >
-      <header className="shrink-0 px-4 pt-4 pb-3">
+      {/* 8px of side padding on a phone, against 16 from `sm` up. Both are the
+          design's: the phone frame runs its cards to 8px of the panel edge, and
+          on a 393px screen those two columns are the difference between a
+          question reading three words to a line and four. */}
+      <header className="shrink-0 px-2 pt-4 pb-3 sm:px-4">
         <div className="flex items-center gap-3">
-          <h1 className="mr-auto min-w-0 text-[16px] font-semibold text-ink">
-            Extracted Questions{" "}
-            {/* The phone frame keeps this, so it stays — it is the sentence
-                that says the list is the paper's questions and not the
-                student's headings, which is exactly the thing a small screen
-                gives you least context to work out. */}
-            <span className="font-normal text-muted">(from question paper)</span>
+          {/* Centred while `Expand All` is away, which is how the phone frame
+              draws it, and one weight throughout — the parenthetical is set in
+              the same bold ink as the rest in both frames, not dropped to a
+              muted aside. It stays on a phone because it is the sentence that
+              says the list is the paper's questions and not the student's
+              headings, which is exactly the thing a small screen gives you
+              least context to work out. */}
+          <h1 className="min-w-0 flex-1 text-center text-[16px] font-semibold text-ink sm:text-left">
+            Extracted Questions (from question paper)
           </h1>
           <button
             type="button"
@@ -135,7 +141,7 @@ export function QuestionPanel({
       <div
         ref={list}
         onKeyDown={onKeyDown}
-        className="scrollbar-slim flex-1 overflow-y-auto px-4 pb-4"
+        className="scrollbar-slim flex-1 overflow-y-auto px-2 pb-4 sm:px-4"
       >
         {summary ? <OverallFeedback summary={summary} /> : null}
 

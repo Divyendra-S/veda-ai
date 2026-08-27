@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useLayoutEffect, useMemo, useState } from "react";
-import { AlertTriangle, FileText, ImageIcon, RotateCw } from "lucide-react";
+import { AlertTriangle, RotateCw } from "lucide-react";
 import { ProcessingPanel } from "@/components/processing-panel";
 import { Button } from "@/components/ui/button";
 import {
@@ -202,13 +202,7 @@ export function ReviewScreen({ examId }: { examId: string }) {
         </div>
       ) : null}
 
-      {narrow ? (
-        <PaneSwitch
-          pane={pane}
-          onChange={setPane}
-          sheetBadge={target?.regions.length ?? 0}
-        />
-      ) : null}
+      {narrow ? <PaneSwitch pane={pane} onChange={setPane} /> : null}
 
       <div className="flex min-h-0 flex-1 gap-3">
         <QuestionPanel
@@ -283,26 +277,44 @@ function FailurePanel({
  * Both panels stay mounted and the hidden one is only `display: none`, so the
  * viewer keeps its scroll position and zoom, and the box the highlight scrolls
  * to already exists in the DOM by the time the pane becomes visible.
+ *
+ * The shape is the design's own `Primary Button - Dark` pair in a 4px well,
+ * read off the phone frame rather than guessed: 16px medium labels at 1.4, a
+ * 46px pill inside a 54px track, no icons and no count. The icons went because
+ * the design has none and two glyphs on a 393px screen cost the labels the room
+ * they need; the count went with them, since selecting a question already
+ * brings this pane forward and a chip that only ever says what just happened is
+ * noise on the one control the phone layout depends on.
  */
 function PaneSwitch({
   pane,
   onChange,
-  sheetBadge,
 }: {
   pane: "questions" | "sheet";
   onChange: (pane: "questions" | "sheet") => void;
-  sheetBadge: number;
 }) {
   const tabs = [
-    { id: "questions" as const, label: "Questions", icon: FileText },
-    { id: "sheet" as const, label: "Answer Sheet", icon: ImageIcon },
+    { id: "questions" as const, label: "Questions" },
+    { id: "sheet" as const, label: "Answer Sheet" },
   ];
 
   return (
+    // White rather than the node's `#f6f6f6`, and the one place this control
+    // departs from the design. The export sets that track against a background
+    // reading `#cecece`, because it is a 2227px scroll capture and the page
+    // gradient is compressed into it; on a real 852px phone the same gradient
+    // is only about a tenth of the way down by the time it reaches here, so
+    // `#f6f6f6` on `#f4f4f4` left the control with no edge at all. White is
+    // what the design is drawing *against* its background, so white is what
+    // reproduces it.
+    //
+    // `z-10`, because the selected pill's shadow is a real part of the design —
+    // it falls a good 40px onto the question panel — and a later sibling with a
+    // background of its own would otherwise paint straight over it.
     <div
       role="tablist"
       aria-label="Review panes"
-      className="flex shrink-0 gap-1 rounded-full bg-surface p-1 shadow-card"
+      className="relative z-10 flex shrink-0 rounded-full bg-surface p-1"
     >
       {tabs.map((tab) => (
         <button
@@ -312,19 +324,18 @@ function PaneSwitch({
           aria-selected={pane === tab.id}
           onClick={() => onChange(tab.id)}
           className={cn(
-            "flex flex-1 cursor-pointer items-center justify-center gap-2 rounded-full px-3 py-2 text-[14px] font-medium whitespace-nowrap transition-colors sm:px-4",
+            "flex-1 cursor-pointer rounded-full px-4 py-3 text-center text-[16px] leading-[1.4]",
+            "font-medium whitespace-nowrap transition-colors outline-offset-2",
+            "focus-visible:outline-2 focus-visible:outline-brand",
             pane === tab.id
-              ? "bg-ink text-white"
-              : "text-muted hover:bg-subtle hover:text-ink",
+              ? // The 1px #7b7b7b stroke rides as an inset ring rather than a
+                // border so it cannot add to the 46px the design measures, and
+                // the two shadows are the node's own.
+                "bg-ink text-white shadow-[inset_0_0_0_1px_#7b7b7b,0_4px_4px_rgba(0,0,0,0.25),0_32px_48px_rgba(0,0,0,0.2)]"
+              : "text-ink hover:bg-black/4",
           )}
         >
-          <tab.icon className="size-[16px]" strokeWidth={2} />
           {tab.label}
-          {tab.id === "sheet" && sheetBadge > 0 ? (
-            <span className="rounded-full bg-highlight px-1.5 text-[11px] font-semibold text-white tabular-nums">
-              {sheetBadge}
-            </span>
-          ) : null}
         </button>
       ))}
     </div>

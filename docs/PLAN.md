@@ -47,6 +47,7 @@ rather than estimated; see `DESIGN.md`.
 
 - ✅ Tailwind theme: brand oranges, ink scale, surfaces, verdict colours, radii, shadows
 - ✅ Bricolage Grotesque self-hosted via `next/font/google` (the typeface the Figma tokens name)
+- ✅ Phone pane switch, topbar and nav drawer rebuilt from Figma nodes `3:1477` / `3:1462`
 - ✅ App shell — 12px inset, floating rounded panels on a fixed vertical gradient
 - ✅ Sidebar, two widths: 304px expanded / 68px collapsed rail
   - Home, My Classroom, Assignments, Exams, My Library
