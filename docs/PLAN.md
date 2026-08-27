@@ -4,8 +4,8 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phases 0–4 complete**, except Phase 0's live URL, which is Phase 9's job.
-Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 5 next.**
+Status: **Phases 0–5 complete**, except Phase 0's live URL, which is Phase 9's job.
+Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 6 next.**
 
 ---
 
@@ -234,16 +234,101 @@ invisible to a spot check of the UI, and it would have looked like a bad prompt.
   returned boxes lands on the right lines, so `box2dToRect`'s y-first 0–1000 reading is
   right — the thing Phase 7's highlighting depends on.
 
-## Phase 5 — Answer extraction
+## Phase 5 — Answer extraction ✅
 
-- Agent tools: `read_page`, `record_answer_block`, `finish`
-- Per block: transcript, `box_2d`, any label the student wrote (`Q2.`), confidence
-- Continuation detection — a block flagged as continuing the previous page becomes a
+- ✅ Agent tools: `read_page`, `record_answer_blocks`, `finish`
+- ✅ Per block: transcript, `box2d`, any label the student wrote (`Q2.`), confidence
+- ✅ Continuation detection — a block flagged as continuing the previous page becomes a
   second region on the same answer rather than a new answer
-- Persist to `answers` with `regions[]`
+- ✅ Persist to `answers` with `regions[]`
 
-**Done when:** boxes visually land on the right handwriting, and an answer deliberately
-split across a page break yields two regions.
+The tool is `record_answer_blocks`, plural and per page, not the singular
+`record_answer_block` this plan first named. A per-block call cannot express "here is
+this page again, corrected", so it would have given up the replace-on-re-record
+contract that makes a repair turn safe in question extraction.
+
+### Decisions taken during the phase
+
+- **This agent never sees the question paper.** It reads the answer sheet as a sheet of
+  paper and reports what is on it. Every hard case in the brief then falls out of the
+  split instead of needing its own code path: answered out of order is just blocks in
+  the order they were written, unanswered is a block that never appears, and an answer
+  to no question is a block whose label matches nothing. Mapping decides all three, with
+  both registers in view.
+- **The label is copied, never inferred.** The prompt forbids working out from the
+  content which question a block probably answers. An invented label is worse than no
+  label, because the next pass will trust it.
+- **The model flags a continuation; the code stitches it.** Folding a flagged block into
+  the previous answer's `regions[]` happens in ordinary code, so a page-4 mistake cannot
+  corrupt a page-1 answer. Two signals join a block to an existing answer, and the order
+  matters: a label the student actually wrote wins, because it also catches a student who
+  answered Q6, moved on, and came back to Q6 four pages later — adjacency cannot see
+  that. Adjacency is the fallback for the ordinary page break, where the continuation
+  carries no label because the sentence simply keeps going.
+- **`status` is derived, not stored by the extractor.** An answer with no `question_id`
+  is exactly what "unmatched" means, so `replaceAnswers` computes one from the other and
+  `AnswerDraft` has no `status` field to get wrong.
+- **A blank answer sheet is a result, not a failure.** Unlike the question register, an
+  empty answer list is recorded rather than raised — every question simply goes
+  unanswered.
+- **`finish` gained a third check.** As well as unrecorded pages and a count mismatch, it
+  refuses once if any block came back without a box, since a block with no box cannot be
+  highlighted and highlighting is what this pass exists for. Once, not forever: if the
+  model still cannot place a block, the transcript is worth keeping.
+
+### Done when
+
+> boxes visually land on the right handwriting, and an answer deliberately split across a
+> page break yields two regions — **both met.**
+
+A 4-page handwritten sheet against the 13-item paper from Phase 4, written to exercise
+every case in the brief at once: answers out of order, one running across a page break,
+one for a question that does not exist, and five questions left unanswered.
+
+| property | result |
+| --- | --- |
+| blocks → answers | 11 blocks folded into 10 answers |
+| page break | `Q6` is one answer with two regions, pages 2 and 3 |
+| out of order | recorded `Q1, Q2, Q5, Q3, Q6, Q7, Q11 (a), Q11 (b), Q14, Q9` — as written, not sorted |
+| no matching question | `Q14` recorded; the paper stops at 13 |
+| unanswered | `4, 8, 10, 12, 13` produce no block, which is the correct absence |
+| labels | copied verbatim, `Q11 (a).` kept as the student wrote it |
+| transcripts | verbatim including the diagram descriptions; confidence 1.0 throughout |
+
+Boxes were checked by measurement rather than by eye. The verification script thresholds
+each page into rows of ink and asks, per box, which rows it covers and which it cuts:
+
+```
+page 4 ink rows: 83-96 114-126 168-180 221-233 255-264 304-317 334-348 369-378
+  Q11 (a).  box  69-138  covers 2 rows
+  Q11 (b).  box 154-192  covers 1 row
+  Q14.      box 208-276  covers 2 rows
+  Q9.       box 270-390  covers 3 rows
+```
+
+**26 of the 27 written lines are covered, and none is clipped.**
+
+### The one that is wrong, and what fixing it cost
+
+The first pass clipped the descenders of the last line of nearly every answer — the model
+puts the bottom edge on the baseline rather than below it — and on page 1 it started `Q1`'s
+box a full line low, losing the opening line.
+
+The descender clipping is gone: boxes are padded 8 units vertically before they are stored.
+That is a deliberately blunt instrument, and it is the right shape of instrument here,
+because the two errors are not equally bad. A highlight that clips its last line reads as
+broken; one that over-covers by a fifth of a line reads as fine. The gap between two
+adjacent answers on a ruled sheet is several times the pad, so nothing bleeds into its
+neighbour.
+
+`Q1` is still wrong, in the same way, in all three runs at temperature 0 — its box covers
+the second of its two lines. A prompt telling the model to check the top edge of the first
+block on a page hardest did not fix it and cost a fresh clip elsewhere, so it was reverted;
+the pad did all the real work. Snapping boxes to measured ink rows would fix it exactly,
+and was rejected: it works on a clean render and would be actively unreliable on a
+photographed page with shadows, skew and ruled lines, which is the input this app is
+actually for. Recorded as a limitation — the highlight still lands on the right answer, one
+line short at the top.
 
 ---
 

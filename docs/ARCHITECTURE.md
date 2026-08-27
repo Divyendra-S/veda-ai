@@ -104,6 +104,16 @@ Usually `regions.length === 1`. An answer that runs off the bottom of page 2 and
 on page 3 is simply two regions. This satisfies the brief's multi-page requirement without
 per-line box extraction.
 
+**The model flags, the code stitches.** A block records whether it continues the answer
+that ran off the previous page; folding that into `regions[]` is done in ordinary code
+(`lib/extraction/answers.ts`, `collect`). Asking the model to assemble the final answer
+list instead would make a page-4 mistake able to corrupt a page-1 answer, and would make
+the per-page "record this page again to correct it" contract impossible. Two signals join a
+block to an existing answer, and the order matters: a label the student actually wrote wins,
+because it also catches the student who answered Q6, moved on, and came back to Q6 four
+pages later — adjacency alone cannot see that. Adjacency is the fallback for the ordinary
+page break, where the continuation carries no label because the sentence simply keeps going.
+
 **Known tradeoff:** a single rectangle over-covers when an answer begins or ends mid-line —
 the box will include the tail of a neighbouring answer's line. Accepted deliberately in
 exchange for far fewer output tokens and simpler code. `AnswerRegion[]` is the natural
@@ -160,7 +170,7 @@ context small and each tool surface unambiguous:
 | Agent | Input | Tools | Produces |
 |---|---|---|---|
 | **Question extraction** | question paper pages (vision) | `read_page`, `record_questions`, `finish` | ordered question register |
-| **Answer extraction** | answer sheet pages (vision) | `read_page`, `record_answer_block`, `finish` | answer blocks + `box_2d` + transcript + any label the student wrote |
+| **Answer extraction** | answer sheet pages (vision) | `read_page`, `record_answer_blocks`, `finish` | answer blocks + `box_2d` + transcript + any label the student wrote |
 | **Mapping + grading** | the two registers (**text only**) | `map_answer`, `mark_unanswered`, `mark_unmatched`, `record_grade`, `finish` | mapping, marks, feedback, summary |
 
 The third agent sees **no images**, which is what makes it cheap and what lets it reason over
@@ -270,3 +280,4 @@ container and every highlight follows automatically.
 | Answer matching no question | `unmatched` — shown to the teacher, never dropped |
 | Serverless timeout | Step runner returns `done: false`; client re-invokes and resumes |
 | Corrupt / encrypted PDF | Caught during client-side rasterization, before any spend |
+| Box under-covers the answer | Every box is padded vertically before it is stored, because a highlight that clips reads as broken while one that over-covers reads as fine. Measured, not assumed — see Phase 5 in `PLAN.md` |

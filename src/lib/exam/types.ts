@@ -56,6 +56,28 @@ export type QuestionRecord = {
 /** What extraction produces, before a row has an id or a position. */
 export type QuestionDraft = Omit<QuestionRecord, "id" | "orderIndex">;
 
+export type AnswerStatus = "mapped" | "unmatched";
+
+/** One student answer, as stored. `regions` is a list because an answer that
+ *  runs across a page break has to highlight on both pages; `labelWritten` is
+ *  what the student actually wrote and never what we deduced, so mapping can
+ *  tell an explicit label from a guess. */
+export type AnswerRecord = {
+  id: string;
+  /** Set by mapping. Null is the "answer matches no question" case. */
+  questionId: string | null;
+  labelWritten: string | null;
+  transcript: string;
+  regions: AnswerRegion[];
+  /** How legible the handwriting was, 0..1 — not how correct the answer is. */
+  confidence: number | null;
+  status: AnswerStatus;
+};
+
+/** What extraction produces. `status` is left out on purpose: it is derived
+ *  from `questionId` when the row is written, so the two cannot disagree. */
+export type AnswerDraft = Omit<AnswerRecord, "id" | "status">;
+
 /** A page with a read URL minted for it. `width`/`height` travel with the URL
  *  because an overlay is positioned against the bitmap, not the viewport. */
 export type SignedPage = {
@@ -83,4 +105,5 @@ export type ExamSnapshot = {
   questionPaper: SignedDocument;
   answerSheet: SignedDocument;
   questions: QuestionRecord[];
+  answers: AnswerRecord[];
 };

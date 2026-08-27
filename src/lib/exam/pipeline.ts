@@ -7,18 +7,20 @@
  * stage forward before the next begins, which makes re-entry idempotent: a run
  * that dies halfway through a step redoes that step and nothing else.
  *
- * Steps are appended as phases land. Today the list ends at question
- * extraction, so an exam is `done` once its register is written; answers,
- * mapping and grading join the list in the phases that build them.
+ * Steps are appended as phases land. Today the list ends at answer extraction,
+ * so an exam is `done` once its register and its answers are written; mapping
+ * and grading join the list in the phases that build them.
  */
 
 import "server-only";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { createDbTracer, type AgentName, type Tracer } from "@/lib/agent/trace";
+import { extractAnswers } from "@/lib/extraction/answers";
 import { extractQuestions } from "@/lib/extraction/questions";
 import {
   loadExam,
   patchExam,
+  replaceAnswers,
   replaceQuestions,
   type ExamRecord,
   type Supa,
@@ -48,7 +50,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     stage: "questions",
-    progress: 100,
+    progress: 50,
     run: async ({ supabase, exam, tracer, signal, deadline }) => {
       const extraction = await extractQuestions({
         supabase,
@@ -69,6 +71,24 @@ const STEPS: Step[] = [
       }
 
       await replaceQuestions(supabase, exam.id, extraction.questions);
+    },
+  },
+  {
+    stage: "answers",
+    progress: 100,
+    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+      const extraction = await extractAnswers({
+        supabase,
+        exam,
+        tracer,
+        signal,
+        budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
+      });
+
+      // A blank answer sheet is a legitimate result — every question simply
+      // goes unanswered — so unlike the question register, an empty list here
+      // is recorded rather than treated as a failed extraction.
+      await replaceAnswers(supabase, exam.id, extraction.answers);
     },
   },
 ];

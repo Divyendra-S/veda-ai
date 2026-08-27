@@ -33,3 +33,22 @@ export function normalizeBox(box: Box2d): Box2d {
   const [a, b, c, d] = box.map(clamp) as Box2d;
   return [Math.min(a, c), Math.min(b, d), Math.max(a, c), Math.max(b, d)];
 }
+
+/**
+ * Grows a box vertically by `units` on the 0..1000 scale, clamped to the page.
+ *
+ * Vertically only, and in absolute units rather than as a fraction of the box:
+ * what is being corrected is a shortfall of part of a text line, which is
+ * roughly the same size whether the block is one line or ten. A line of
+ * handwriting is around 1.5-3% of a page, so single-digit units clear a
+ * descender without reaching a neighbouring answer.
+ */
+export function padBox(box: Box2d, units: number): Box2d {
+  const [ymin, xmin, ymax, xmax] = box;
+  return [
+    Math.max(0, ymin - units),
+    xmin,
+    Math.min(1000, ymax + units),
+    xmax,
+  ];
+}
