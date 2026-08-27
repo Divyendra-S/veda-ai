@@ -20,7 +20,7 @@ import { RateLimiter } from "@/lib/agent/limiter";
 import { defineToolsFor, ToolRegistry } from "@/lib/agent/tools";
 import type { Tracer } from "@/lib/agent/trace";
 import type { TokenUsage } from "@/lib/agent/trace";
-import { loadPagePart } from "@/lib/exam/pages";
+import { attachPages, loadPagePart } from "@/lib/exam/pages";
 import type { ExamRecord, QuestionDraft, Supa } from "@/lib/exam/repository";
 import { normalizeBox } from "@/lib/exam/geometry";
 import type { Box2d, PageImage } from "@/lib/exam/types";
@@ -277,19 +277,25 @@ export async function extractQuestions({
     read: new Set(),
   };
 
-  // Page 1 rides along with the instructions. The model would open it first in
-  // any case, and priming it here saves a round trip off a ~10 RPM budget.
-  const firstPart = await loadPagePart(supabase, pages[0]);
-  context.read.add(0);
+  // Every page rides along with the instructions rather than being fetched one
+  // read_page call at a time. Each of those calls is a full model round trip
+  // that ends with the model looking at exactly the image we were always going
+  // to send it, and on a paced key a round trip is seconds. read_page stays on
+  // the tool list for a second look at a page it has already seen.
+  const attached = await attachPages(supabase, pages, "Question paper");
+  for (let index = 0; index < attached.count; index += 1) context.read.add(index);
 
   const result = await runAgent<Context, { notes?: string }>({
     systemInstruction: SYSTEM_INSTRUCTION,
     initialParts: [
       {
-        text: `This question paper has ${pages.length} page(s), numbered 1 to ${pages.length}. Page 1 is attached below. Read each remaining page with read_page, record it with record_questions, then call finish.`,
+        text: `This question paper has ${pages.length} page(s), numbered 1 to ${pages.length}. ${
+          attached.count === pages.length
+            ? `All ${pages.length} are attached below, in order.`
+            : `Pages 1 to ${attached.count} are attached below; read the rest with read_page.`
+        } Record each page with record_questions, then call finish.`,
       },
-      { text: `=== Question paper — page 1 of ${pages.length} ===` },
-      firstPart,
+      ...attached.parts,
     ],
     tools: new ToolRegistry<Context>([readPage, recordQuestions, finish]),
     context,

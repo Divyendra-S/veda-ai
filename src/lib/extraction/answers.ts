@@ -22,14 +22,14 @@ import { runAgent, type AgentRunStatus } from "@/lib/agent/loop";
 import { RateLimiter } from "@/lib/agent/limiter";
 import { defineToolsFor, ToolRegistry } from "@/lib/agent/tools";
 import type { TokenUsage, Tracer } from "@/lib/agent/trace";
-import { loadPagePart } from "@/lib/exam/pages";
+import { attachPages, loadPagePart } from "@/lib/exam/pages";
 import type { ExamRecord, Supa } from "@/lib/exam/repository";
 import { normalizeBox, padBox } from "@/lib/exam/geometry";
 import type { AnswerDraft, Box2d, PageImage } from "@/lib/exam/types";
 
 const SYSTEM_INSTRUCTION = `You read a student's handwritten answer sheet and report exactly what is written on it.
 
-Work one page at a time: read a page, record what is on it, then move to the next page. Never record a page you have not read.
+Work one page at a time: read a page, record what is on it, then move to the next page. Record exactly ONE page per reply — never two in the same reply, even when you can see both. Never record a page you have not read.
 
 You do NOT have the question paper and you are not being asked to match anything to it. Report the writing; something else does the matching. That means you never renumber, never reorder, and never decide an answer "must be" for a particular question.
 
@@ -149,7 +149,7 @@ const recordAnswerBlocks = tool({
       .array(blockSchema)
       .describe("The blocks on this page, top to bottom."),
   }),
-  handler: ({ page, blocks }, ctx) => {
+  handler: async ({ page, blocks }, ctx) => {
     const index = page - 1;
     if (!ctx.pages[index]) {
       throw new Error(
@@ -164,13 +164,34 @@ const recordAnswerBlocks = tool({
 
     ctx.recorded.set(index, blocks.map(clean));
 
+    // The next page comes back attached to this result. That saves the
+    // read_page round trip the old flow spent per page, and — the reason it is
+    // done here rather than up front — it is what keeps one page per response.
+    // See the note above extractAnswers.
+    const next = ctx.pages[index + 1];
+    let attachments: Part[] | undefined;
+    if (next && !ctx.read.has(index + 1)) {
+      const part = await loadPagePart(ctx.supabase, next);
+      ctx.read.add(index + 1);
+      attachments = [
+        {
+          text: `=== Answer sheet — page ${index + 2} of ${ctx.pages.length} ===`,
+        },
+        part,
+      ];
+    }
+
     return {
       output: {
         page,
         recorded: blocks.length,
         totalSoFar: countAll(ctx),
         pagesRemaining: remainingPages(ctx),
+        ...(attachments
+          ? { note: `Page ${index + 2} follows this result. Record it next.` }
+          : {}),
       },
+      attachments,
     };
   },
 });
@@ -275,19 +296,33 @@ export async function extractAnswers({
     askedForBoxes: false,
   };
 
-  // Page 1 rides along with the instructions, as in question extraction: the
-  // model would open it first anyway, and this saves a round trip.
-  const firstPart = await loadPagePart(supabase, pages[0]);
-  context.read.add(0);
+  // One page up front, unlike question extraction, and this is measured rather
+  // than cautious. Handed both pages at once, the model sometimes records both
+  // in a single response — and when it does, the second page's boxes slide down
+  // by roughly one block: the same sheet that boxes cleanly across two turns
+  // came back with answer 23's box drawn over answer 24's first lines. Three
+  // replays of the real conversation reproduced it once. A highlight on the
+  // wrong paragraph is the one failure this app cannot have, so the page the
+  // model is boxing is the page it has just been given, and the next one
+  // arrives only once this one is recorded.
+  //
+  // It costs nothing: the next page rides back on the record_answer_blocks
+  // result, so a two-page sheet is still two record turns and a finish —
+  // exactly what the old read-then-record flow spent on one page.
+  const attached = await attachPages(supabase, pages, "Answer sheet", 1);
+  for (let index = 0; index < attached.count; index += 1) context.read.add(index);
 
   const result = await runAgent<Context, { notes?: string }>({
     systemInstruction: SYSTEM_INSTRUCTION,
     initialParts: [
       {
-        text: `This answer sheet has ${pages.length} page(s), numbered 1 to ${pages.length}. Page 1 is attached below. Read each remaining page with read_page, record it with record_answer_blocks, then call finish.`,
+        text: `This answer sheet has ${pages.length} page(s), numbered 1 to ${pages.length}. ${
+          pages.length === 1
+            ? "It is attached below."
+            : "Page 1 is attached below; each page you record hands you the next one."
+        } Record one page per turn with record_answer_blocks — never two in the same reply — then call finish.`,
       },
-      { text: `=== Answer sheet — page 1 of ${pages.length} ===` },
-      firstPart,
+      ...attached.parts,
     ],
     tools: new ToolRegistry<Context>([readPage, recordAnswerBlocks, finish]),
     context,
@@ -330,6 +365,8 @@ export async function extractAnswers({
 function collect(ctx: Context): AnswerDraft[] {
   const answers: AnswerDraft[] = [];
   const byLabel = new Map<string, AnswerDraft>();
+  /** The last page each answer was seen on, for the page-break test below. */
+  const lastPage = new Map<AnswerDraft, number>();
 
   for (const [position, blocks] of [...ctx.recorded.entries()].sort(
     ([a], [b]) => a - b,
@@ -337,10 +374,18 @@ function collect(ctx: Context): AnswerDraft[] {
     const pageIndex = ctx.pages[position]?.index ?? position;
 
     for (const block of blocks) {
-      const key = block.label ? normalizeLabel(block.label) : null;
+      const key = block.label ? stitchKey(block.label) : null;
+      const carried = key ? byLabel.get(key) : undefined;
+      // A repeated label reunites two halves of one answer only when the
+      // writing has actually crossed a page boundary, which is the case this
+      // exists for. Within a page it means something else — a student
+      // numbering the points of a single answer (1), (2) writes the same
+      // marker as the student numbering the points of the next one — and
+      // merging on it drags an unrelated paragraph into the highlight.
       const target =
-        (key ? byLabel.get(key) : undefined) ??
-        (block.continuesPrevious ? answers.at(-1) : undefined);
+        (carried && (lastPage.get(carried) ?? pageIndex) < pageIndex
+          ? carried
+          : undefined) ?? (block.continuesPrevious ? answers.at(-1) : undefined);
 
       if (target) {
         if (block.box2d) target.regions.push({ pageIndex, box2d: block.box2d });
@@ -351,6 +396,7 @@ function collect(ctx: Context): AnswerDraft[] {
           target.confidence ?? block.confidence,
           block.confidence,
         );
+        lastPage.set(target, pageIndex);
         continue;
       }
 
@@ -363,6 +409,7 @@ function collect(ctx: Context): AnswerDraft[] {
         confidence: block.confidence,
       };
       answers.push(answer);
+      lastPage.set(answer, pageIndex);
       if (key) byLabel.set(key, answer);
     }
   }
@@ -371,6 +418,22 @@ function collect(ctx: Context): AnswerDraft[] {
 }
 
 const LABEL = /(\d+)\s*(?:[([]\s*([A-Za-z]{1,4})\s*[)\]])?/;
+
+/** A label that is nothing but a bracketed marker: "(2)", "(a)", "(iii)". */
+const SUBPOINT = /^[([]\s*(?:\d{1,2}|[ivx]{1,4}|[a-z])\s*[)\]][.:]?$/i;
+
+/**
+ * The label a page-break stitch may key on, which is not every label.
+ *
+ * Students number the points inside one answer (1), (2) exactly as they number
+ * the points inside the next one, so a bare bracketed marker identifies a line
+ * of an answer rather than an answer. Treating it as a name is how answer 24's
+ * second paragraph ends up highlighted as part of answer 23. A label with a
+ * question number in it — "22.", "6)", "(Q6 continued)" — still keys normally.
+ */
+function stitchKey(raw: string): string | null {
+  return SUBPOINT.test(raw.trim()) ? null : normalizeLabel(raw);
+}
 
 /**
  * Reduces a written label to the part that identifies a question, so that

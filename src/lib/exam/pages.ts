@@ -46,6 +46,46 @@ export async function loadPagePart(
 }
 
 /**
+ * How many pages ride along with the opening instructions.
+ *
+ * Every page attached up front is a model round trip not spent asking for it,
+ * and a round trip on a paced key is seconds — so with the upload capped at
+ * two pages this fetches the whole document in one go and the agent never
+ * calls `read_page` at all. The ceiling exists for the day the cap is raised:
+ * past a handful of pages the opening request stops being a saving and starts
+ * being a wall of images re-sent on every turn.
+ */
+export const PRELOAD_PAGES = 4;
+
+/**
+ * The opening image parts for a document: a header line and the page itself,
+ * per page, in order — the same shape `read_page` produces, so the model sees
+ * one consistent format however a page arrived.
+ *
+ * `limit` overrides the ceiling for a caller that wants fewer. Answer
+ * extraction passes 1 on purpose; see the note in `answers.ts`.
+ */
+export async function attachPages(
+  supabase: Supa,
+  pages: PageImage[],
+  label: string,
+  limit: number = PRELOAD_PAGES,
+): Promise<{ parts: Part[]; count: number }> {
+  const count = Math.min(pages.length, limit);
+  const images = await Promise.all(
+    pages.slice(0, count).map((page) => loadPagePart(supabase, page)),
+  );
+
+  return {
+    count,
+    parts: images.flatMap((image, index) => [
+      { text: `=== ${label} — page ${index + 1} of ${pages.length} ===` },
+      image,
+    ]),
+  };
+}
+
+/**
  * Mints read URLs for the viewer. The bucket is private, so these are the only
  * way the browser sees a page — and they carry the same `width`/`height` the
  * model was given, which is what keeps an overlay aligned with the bitmap.

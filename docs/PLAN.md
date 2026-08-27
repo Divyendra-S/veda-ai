@@ -5,7 +5,8 @@ before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
 Status: **Phases 0–8 complete**, except Phase 0's live URL, which is Phase 9's job.
-Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 9 next.**
+Phase 2's end-to-end check ran with Phase 4 and passed, and Phase 8.5 tuned what it
+measured. **Phase 9 next.**
 
 ---
 
@@ -703,6 +704,33 @@ passes happily through a collapse.
 - **`confidence` is stored but not shown.** §8 of `ARCHITECTURE.md` lists low-confidence
   handwriting as flagged in the UI; it is recorded on every answer block and nothing on
   screen reads it yet.
+
+---
+
+## Phase 8.5 — Speed, and the highlight it nearly cost ✅
+
+Not in the original nine. It came out of watching a real run: 118 seconds is long enough
+that a teacher assumes the app has hung.
+
+- **Run time 118s → 75s** on the sample pair, measured end to end in Chrome. Three
+  changes: the two extractions now run concurrently (they never shared data), pages no
+  longer cost a `read_page` round trip each, and `GEMINI_RPM` replaced a hardcoded
+  free-tier pace of 10. The bill did not move — $0.041 → $0.040. See "How long a run
+  takes" in `ARCHITECTURE.md`.
+- **A sample pair to test with**, in `public/samples/`: the real CBSE 2024 Class X Science paper
+  and a real topper's handwritten booklet for it, two PDFs, upload as-is. Expected
+  result 8/14, 57%.
+- **The upload screen now says why two pages.** It is a spend cap, not a technical one,
+  and a teacher would never guess it.
+- **Regression found and fixed in the same phase.** Attaching every answer-sheet page to
+  the opening request let the model record two pages in one response, and when it did,
+  the second page's boxes slid down by a block — answer 23 highlighted over answer 24.
+  Fixed by handing the answer agent one page at a time, each arriving on the previous
+  page's record result. Same turn count, fewer prompt tokens.
+- **Sub-point labels no longer stitch answers together.** A student numbering the points
+  of answer 23 (1), (2) writes the same markers as in answer 24, and the page-break
+  stitch in `collect` was merging on them — putting answer 24's second paragraph inside
+  answer 23's highlight. Stitching now needs a real question label *and* a page boundary.
 
 ---
 

@@ -162,6 +162,17 @@ with jitter on 429/5xx. Every Gemini call in the app goes through it. This is tr
 core component, not error handling bolted on later — without it the app fails on exactly the
 inputs it is meant to handle.
 
+The pace itself is `GEMINI_RPM`, defaulting to 10. It cannot be inferred — the free tier
+allows ten requests a minute, a billed key allows a thousand, and the API will not say which
+one it is looking at — and it is the single largest lever on how long a run takes. The
+default stays at the free-tier figure because that is the key a reviewer opening this
+project will have; guessing high there turns every run into a 429 storm, while guessing low
+only costs time.
+
+Concurrent steps each hold their own bucket, so a retry stays attributable to the agent that
+provoked it. The buckets are therefore told how many of them there are (`rpmShare`) — two
+steps each pacing at 10 would together fire at 20.
+
 ### 4.3 Four agents, one loop
 
 The same loop runs four times with different tool surfaces. Splitting them keeps each
@@ -226,12 +237,25 @@ persisted, so re-entry is idempotent and resumes where it left off.
 The steps are the four agents of §4.3, and a step's `stage` is also the name its traces are
 written under — one union, not two that can drift:
 
-| stage | writes | progress |
-|---|---|---|
-| `questions` | the question register | 40 |
-| `answers` | answer blocks, regions, transcripts | 70 |
-| `mapping` | `answers.question_id` and `status` | 85 |
-| `grading` | the `gradings` rows and `exams.summary` | 100 |
+| stage | phase | writes | progress |
+|---|---|---|---|
+| `questions` | 0 | the question register | 40 |
+| `answers` | 0 | answer blocks, regions, transcripts | 70 |
+| `mapping` | 1 | `answers.question_id` and `status` | 85 |
+| `grading` | 2 | the `gradings` rows and `exams.summary` | 100 |
+
+**Steps sharing a phase run concurrently.** Reading the question paper and reading the
+answer sheet touch nothing in common — neither reads what the other writes — and they were
+sequential only because a list is sequential. Running them together halves the wait before
+matching can start. Matching needs both, so it is a phase of its own; grading needs the
+matching.
+
+Two consequences worth naming. A phase that fails re-runs *whole* on retry, including the
+step in it that succeeded: one wasted extraction, in exchange for not tracking per-step
+completion, and every step replaces its own output so the result is the same either way.
+And the stage recorded on a failure is the step that actually broke, not the phase's
+name — the review screen reads that stage to say what failed and what survived, and with
+two steps in flight the phase name would be a coin flip between them.
 
 Each step reads what the previous one persisted rather than being handed it in memory,
 because that is the path a resumed run always takes, so it is the path worth exercising on
@@ -384,3 +408,56 @@ is a real guard against a 40-page scan and a poor lever on cost — halving page
 around a tenth. The levers that actually move it are a paper with fewer questions and
 `GEMINI_MODEL`, which is read from the environment: `gemini-2.5-flash-lite` is roughly six
 times cheaper.
+
+### How long a run takes
+
+Measured end to end in Chrome, twice, on the same two files — the CBSE 2024 Class X Science
+pair in `public/samples/` (2 question-paper pages, 2 answer-sheet pages, 13 question entries). The
+clock starts at **Start Mapping** and stops when the review screen has rows.
+
+| | as committed at Phase 8 | now |
+|---|---|---|
+| upload + rasterize | 8s | 9s |
+| reading both documents | 48s, then 30s | **41s, together** |
+| matching | 13s | 10s |
+| grading | 16s | 15s |
+| **total** | **118s** | **75s** |
+| model calls | 11 | 9 |
+| tokens | 28,346 in / 13,159 out | 23,348 in / 13,314 out |
+| cost | $0.041 | $0.040 |
+
+Three changes, and the comparison bundles all three because that is what a teacher
+experiences:
+
+1. **The two extractions run at the same time** (§5). They never shared data; they were
+   sequential because a list is sequential. This is most of the 41 seconds.
+2. **Pages no longer cost a round trip to fetch.** Each `read_page` call was a full turn
+   that ended with the model looking at an image we were always going to send it — and
+   because the whole history is re-sent every turn, removing turns takes prompt tokens
+   down with it. The question paper gets every page attached to the opening request
+   (`PRELOAD_PAGES` caps that at four, past which the opening request stops being a
+   saving and starts being a wall of images). The answer sheet gets one page at a time,
+   each arriving on the previous page's `record_answer_blocks` result — same turn count,
+   for the reason in the next section.
+3. **`GEMINI_RPM`** (§4.2). The old code paced at a hardcoded 10 requests a minute, which
+   is the free tier's limit; the run above sets 300 because the key is billed.
+
+### Why the answer sheet is still read one page at a time
+
+Handed both pages at once, the model sometimes records both in a single response — and
+when it does, the second page's boxes slide down by roughly a block: on the sample sheet,
+answer 23's box came back drawn over answer 24's opening lines. Three replays of the real
+conversation reproduced it once; the two replays that recorded each page in its own turn
+were exact. A highlight on the wrong paragraph is the one failure this app cannot have.
+
+So the page the model is boxing is the page it has just been given, and the next one
+arrives only once this one is recorded. It costs nothing over the alternative — a two-page
+sheet is two record turns and a finish either way — and it takes a page image out of the
+opening request, so the answer agent's prompt tokens went **down**.
+
+The question paper keeps every page up front: nothing it extracts carries a bounding box,
+so there is no coordinate frame to confuse.
+
+Note what did **not** change: the bill. Nine calls over the same images cost what eleven
+did, within run-to-run noise. Speed and cost are separate levers here — the page cap moves
+neither much, and the thing that would move cost is `GEMINI_MODEL`.

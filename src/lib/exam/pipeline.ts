@@ -10,10 +10,19 @@
  * The four steps are also the four agents: each one's `stage` is the name its
  * traces are written under, which is why `StepStage` is an intersection of the
  * two unions rather than either one alone.
+ *
+ * Steps are grouped into phases, and a phase's steps run **concurrently**.
+ * Reading the question paper and reading the answer sheet share a phase
+ * because neither one reads anything the other writes — they were only ever
+ * sequential because a list is sequential, and running them one after the
+ * other made a teacher wait for the question paper before the answer sheet was
+ * even opened. Matching needs both, so it is a phase of its own, and grading
+ * needs the matching.
  */
 
 import "server-only";
 import { createServerSupabase } from "@/lib/supabase/server";
+import { defaultRpm, RateLimiter } from "@/lib/agent/limiter";
 import { createDbTracer, type AgentName, type Tracer } from "@/lib/agent/trace";
 import { extractAnswers } from "@/lib/extraction/answers";
 import { extractQuestions } from "@/lib/extraction/questions";
@@ -42,6 +51,8 @@ type StepContext = {
   supabase: Supa;
   exam: ExamRecord;
   tracer: Tracer;
+  /** This step's share of the key's request budget. See `rpmShare`. */
+  limiter: RateLimiter;
   signal?: AbortSignal;
   /** Wall-clock ceiling for this whole invocation, not just this step. */
   deadline: number;
@@ -49,6 +60,8 @@ type StepContext = {
 
 type Step = {
   stage: StepStage;
+  /** Steps sharing a phase number run at the same time. */
+  phase: number;
   /** The exam's `progress` once this step has completed. */
   progress: number;
   run: (ctx: StepContext) => Promise<void>;
@@ -57,12 +70,14 @@ type Step = {
 const STEPS: Step[] = [
   {
     stage: "questions",
+    phase: 0,
     progress: 40,
-    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+    run: async ({ supabase, exam, tracer, limiter, signal, deadline }) => {
       const extraction = await extractQuestions({
         supabase,
         exam,
         tracer,
+        limiter,
         signal,
         // Leave the invocation a few seconds to persist what came back rather
         // than letting the agent run right up to the deadline and lose it.
@@ -82,12 +97,14 @@ const STEPS: Step[] = [
   },
   {
     stage: "answers",
+    phase: 0,
     progress: 70,
-    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+    run: async ({ supabase, exam, tracer, limiter, signal, deadline }) => {
       const extraction = await extractAnswers({
         supabase,
         exam,
         tracer,
+        limiter,
         signal,
         budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
       });
@@ -100,8 +117,9 @@ const STEPS: Step[] = [
   },
   {
     stage: "mapping",
+    phase: 1,
     progress: 85,
-    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+    run: async ({ supabase, exam, tracer, limiter, signal, deadline }) => {
       const [questions, answers] = await Promise.all([
         loadQuestions(supabase, exam.id),
         loadAnswers(supabase, exam.id),
@@ -116,6 +134,7 @@ const STEPS: Step[] = [
         questions,
         answers,
         tracer,
+        limiter,
         signal,
         budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
       });
@@ -125,8 +144,9 @@ const STEPS: Step[] = [
   },
   {
     stage: "grading",
+    phase: 2,
     progress: 100,
-    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+    run: async ({ supabase, exam, tracer, limiter, signal, deadline }) => {
       // Re-read rather than carrying the mapping across from the previous
       // step: the two steps have to work in separate invocations anyway, so
       // reading what was persisted is the path that is always exercised.
@@ -139,6 +159,7 @@ const STEPS: Step[] = [
         questions,
         answers,
         tracer,
+        limiter,
         signal,
         budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
       });
@@ -196,33 +217,34 @@ export async function advanceExam(
     return { done: false, stage: exam.stage, status: "running", busy: true };
   }
 
-  let index = STEPS.findIndex((step) => step.stage === exam.stage);
+  const phases = groupIntoPhases(STEPS);
+  let index = phases.findIndex((phase) =>
+    phase.some((step) => step.stage === exam.stage),
+  );
   if (index < 0) index = 0;
 
   try {
-    for (; index < STEPS.length; index += 1) {
-      const step = STEPS[index];
+    for (; index < phases.length; index += 1) {
+      const phase = phases[index];
       if (Date.now() >= deadline) {
-        return { done: false, stage: step.stage, status: "running" };
+        return { done: false, stage: phase[0].stage, status: "running" };
       }
 
+      // The stage the screen shows while a phase runs is its first step's.
+      // Two steps cannot both be the current stage, and naming the one a
+      // teacher is waiting on is more useful than inventing a compound name.
       await patchExam(supabase, examId, {
         status: "running",
-        stage: step.stage,
+        stage: phase[0].stage,
         error: null,
       });
 
-      const tracer = createDbTracer(supabase, examId, step.stage);
-      try {
-        await step.run({ supabase, exam, tracer, signal, deadline });
-      } finally {
-        await tracer.flush();
-      }
+      await runPhase(phase, { supabase, examId, exam, signal, deadline });
 
-      const next = STEPS[index + 1];
+      const next = phases[index + 1];
       await patchExam(supabase, examId, {
-        stage: next ? next.stage : "done",
-        progress: step.progress,
+        stage: next ? next[0].stage : "done",
+        progress: Math.max(...phase.map((step) => step.progress)),
       });
     }
 
@@ -234,8 +256,103 @@ export async function advanceExam(
     return { done: true, stage: "done", status: "done" };
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
-    await patchExam(supabase, examId, { status: "error", error: message });
-    return { done: true, stage: exam.stage, status: "error" };
+    // The stage recorded on a failure is the step that actually broke, not the
+    // one the phase is named after — the review screen reads it to say what
+    // failed and what survived, and with two steps in flight the name of the
+    // phase is a coin flip between them.
+    const stage = error instanceof StepFailure ? error.stage : exam.stage;
+    await patchExam(supabase, examId, { status: "error", stage, error: message });
+    return { done: true, stage, status: "error" };
+  }
+}
+
+/** Steps in declaration order, bucketed by phase. */
+function groupIntoPhases(steps: Step[]): Step[][] {
+  const byPhase = new Map<number, Step[]>();
+  for (const step of steps) {
+    const bucket = byPhase.get(step.phase);
+    if (bucket) bucket.push(step);
+    else byPhase.set(step.phase, [step]);
+  }
+  return [...byPhase.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, bucket]) => bucket);
+}
+
+/**
+ * Runs one phase's steps together and fails as soon as any of them does.
+ *
+ * `allSettled` rather than `all`, so a step that succeeds beside a step that
+ * fails still gets to persist what it read — a failed answer-sheet extraction
+ * should not throw away a question register that came back clean. The first
+ * rejection is then rethrown carrying its own stage.
+ *
+ * Retrying a failed phase re-runs every step in it, including the ones that
+ * succeeded. That is one wasted extraction on a retry, in exchange for not
+ * having to track per-step completion; every step replaces its own output, so
+ * the result is the same either way.
+ */
+async function runPhase(
+  phase: Step[],
+  {
+    supabase,
+    examId,
+    exam,
+    signal,
+    deadline,
+  }: {
+    supabase: Supa;
+    examId: string;
+    exam: ExamRecord;
+    signal?: AbortSignal;
+    deadline: number;
+  },
+): Promise<void> {
+  const rpm = rpmShare(phase.length);
+
+  const outcomes = await Promise.allSettled(
+    phase.map(async (step) => {
+      const tracer = createDbTracer(supabase, examId, step.stage);
+      const limiter = new RateLimiter({
+        rpm,
+        signal,
+        onRetry: (info) => tracer.emit(0, { kind: "retry", ...info }),
+      });
+      try {
+        await step.run({ supabase, exam, tracer, limiter, signal, deadline });
+      } catch (error) {
+        throw new StepFailure(step.stage, error);
+      } finally {
+        await tracer.flush();
+      }
+    }),
+  );
+
+  const failure = outcomes.find((outcome) => outcome.status === "rejected");
+  if (failure) throw failure.reason;
+}
+
+/**
+ * The per-step slice of the key's request budget.
+ *
+ * Concurrent steps each hold their own bucket — which keeps a retry traceable
+ * to the agent that provoked it — so the buckets have to be told about each
+ * other, or two steps at 10 RPM would together fire at 20 and turn the pacing
+ * into an invitation to be rate-limited.
+ */
+function rpmShare(lanes: number): number {
+  return Math.max(1, defaultRpm() / lanes);
+}
+
+/** Carries the stage that failed out of a phase running several steps. */
+class StepFailure extends Error {
+  constructor(
+    readonly stage: StepStage,
+    cause: unknown,
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause));
+    this.name = "StepFailure";
+    this.cause = cause;
   }
 }
 

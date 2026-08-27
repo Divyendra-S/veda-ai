@@ -25,7 +25,7 @@ export type RetryInfo = {
 };
 
 export type RateLimiterOptions = {
-  /** Requests per minute to pace at. Default 10 — the free-tier flash limit. */
+  /** Requests per minute to pace at. Defaults to `GEMINI_RPM`. */
   rpm?: number;
   /** How many requests may burst before pacing kicks in. Default 2. */
   burst?: number;
@@ -38,6 +38,25 @@ export type RateLimiterOptions = {
   onRetry?: (info: RetryInfo) => void;
   signal?: AbortSignal;
 };
+
+/**
+ * Default pacing, from `GEMINI_RPM`.
+ *
+ * This is the single largest lever on how long a run takes, and it cannot be
+ * inferred: the free tier allows about 10 requests a minute, a paid key allows
+ * a thousand, and the API will not say which one it is looking at. At 10 the
+ * pipeline spends a minute of an eleven-call run doing nothing but waiting for
+ * a token; at 1000 it never waits at all.
+ *
+ * The default stays at the free-tier figure because that is the key a reviewer
+ * opening this project will have, and guessing high there would turn every run
+ * into a 429 storm. Guessing low only costs time — which is why raising it is
+ * a one-line change in `.env.local` rather than a code change.
+ */
+export function defaultRpm(): number {
+  const raw = Number(process.env.GEMINI_RPM);
+  return Number.isFinite(raw) && raw > 0 ? raw : 10;
+}
 
 /** Statuses worth retrying: quota, transient server faults, upstream timeouts. */
 const RETRYABLE = new Set([408, 429, 500, 502, 503, 504]);
@@ -114,7 +133,7 @@ export class RateLimiter {
   private gate: Promise<void> = Promise.resolve();
 
   constructor(options: RateLimiterOptions = {}) {
-    const rpm = options.rpm ?? 10;
+    const rpm = options.rpm ?? defaultRpm();
     this.capacity = Math.max(1, options.burst ?? 2);
     this.refillPerMs = rpm / 60_000;
     this.maxRetries = options.maxRetries ?? 4;

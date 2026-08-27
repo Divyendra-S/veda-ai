@@ -38,7 +38,7 @@ import type { ExamStage } from "@/lib/exam/types";
 
 const STAGE_TITLES: Record<ExamStage, string> = {
   queued: "Getting started…",
-  questions: "Reading the question paper…",
+  questions: "Reading the question paper and answer sheet…",
   answers: "Reading the answer sheet…",
   mapping: "Matching answers to questions…",
   grading: "Grading…",
@@ -159,7 +159,7 @@ export function ReviewScreen({ examId }: { examId: string }) {
         } · ${exam.questionPaper.pages.length} question page${
           exam.questionPaper.pages.length === 1 ? "" : "s"
         }`}
-        slowNote="Still going. The free tier this runs on allows about ten model calls a minute, so a long paper waits its turn between pages."
+        slowNote="Still going. This runs on a tier-1 Gemini key, so requests are paced rather than fired all at once and part of the wait is the run holding for its next slot. A two-page pair takes about a minute and a half."
       />
     );
   }

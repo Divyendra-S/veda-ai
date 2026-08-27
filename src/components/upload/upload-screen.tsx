@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropCard } from "@/components/upload/drop-card";
 import { countPdfPages, PdfPasswordError } from "@/lib/pdf/rasterize";
 import {
+  MAX_PAGES_PER_DOCUMENT,
   pageProblem,
   toSelection,
   validate,
@@ -33,6 +34,7 @@ export function UploadScreen() {
   >({ question: null, answer: null });
   const [errors, setErrors] = useState<Partial<Record<Side, string>>>({});
   const [progress, setProgress] = useState<SubmitProgress | null>(null);
+  const [loadingSample, setLoadingSample] = useState(false);
 
   const setSide = useCallback(
     (side: Side, value: FileSelection | null) =>
@@ -89,6 +91,43 @@ export function UploadScreen() {
     },
     [setSide],
   );
+
+  /**
+   * Loads the pair in `public/samples/` straight into both cards.
+   *
+   * Whoever opens this first will not have a question paper and a matching
+   * handwritten answer sheet lying around, and asking them to find one is
+   * asking them not to try it. The files go through `handleSelect` like any
+   * other upload, so the page count, the cap and the error paths are the ones
+   * a real file takes.
+   */
+  const loadSample = useCallback(async () => {
+    setLoadingSample(true);
+    try {
+      for (const [side, name] of [
+        ["question", "question-paper.pdf"],
+        ["answer", "answer-sheet.pdf"],
+      ] as const) {
+        const response = await fetch(`/samples/${name}`);
+        if (!response.ok) throw new Error(`Could not load ${name}.`);
+        await handleSelect(side, [
+          new File([await response.blob()], name, {
+            type: "application/pdf",
+          }),
+        ]);
+      }
+    } catch (error) {
+      setErrors((previous) => ({
+        ...previous,
+        question:
+          error instanceof Error
+            ? error.message
+            : "The sample files could not be loaded.",
+      }));
+    } finally {
+      setLoadingSample(false);
+    }
+  }, [handleSelect]);
 
   const submit = useMutation({
     mutationFn: () =>
@@ -160,6 +199,47 @@ export function UploadScreen() {
           }}
         />
       </div>
+
+      {/* Neither of these is a technical limit and neither is guessable, so
+          both are stated with their reason rather than sprung later — the cap
+          as a rejection, the wait as a screen that looks stuck. */}
+      <p className="mt-3 max-w-[560px] px-2 text-center text-[13px] leading-relaxed text-faint">
+        Up to {MAX_PAGES_PER_DOCUMENT} pages per file. Every page is an image
+        the AI is billed to read, so the cap keeps a run to a few cents — it is
+        a spending limit, not a technical one. Expect about a minute and a half
+        from here: this runs on a tier-1 Gemini key, so requests are paced
+        rather than fired all at once.
+      </p>
+
+      <p className="mt-2 max-w-[560px] px-2 text-center text-[13px] leading-relaxed text-faint">
+        No paper to hand?{" "}
+        <button
+          type="button"
+          onClick={loadSample}
+          disabled={loadingSample}
+          className="font-medium text-brand underline underline-offset-2 disabled:opacity-60"
+        >
+          {loadingSample ? "Loading the sample…" : "Load a real sample pair"}
+        </button>{" "}
+        — a CBSE Class X Science 2024 paper with a student&apos;s handwritten
+        booklet for it. Or download{" "}
+        <a
+          className="underline underline-offset-2"
+          href="/samples/question-paper.pdf"
+          download
+        >
+          the paper
+        </a>{" "}
+        and{" "}
+        <a
+          className="underline underline-offset-2"
+          href="/samples/answer-sheet.pdf"
+          download
+        >
+          the answer sheet
+        </a>
+        .
+      </p>
 
       <Button
         className="mt-8 sm:mt-11"

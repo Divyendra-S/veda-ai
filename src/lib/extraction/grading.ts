@@ -165,13 +165,13 @@ const finish = tool({
       .array(z.string().max(160))
       .max(5)
       .describe(
-        'What this student did well, one specific point each: "clear, accurate diagrams with correct labels".',
+        'What this student did well, one specific point each, each under 160 characters: "clear, accurate diagrams with correct labels".',
       ),
     gaps: z
       .array(z.string().max(160))
       .max(5)
       .describe(
-        'What to work on, one specific point each: "the two stages of photosynthesis".',
+        'What to work on, one specific point each, each under 160 characters: "the two stages of photosynthesis".',
       ),
   }),
   handler: (input, ctx) => {
