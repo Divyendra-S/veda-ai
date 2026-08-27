@@ -98,7 +98,7 @@ function describe(selection: FileSelection, pages: RasterPage[]) {
   return {
     name: selection.label,
     sizeBytes: selection.sizeBytes,
-    mimeType: pages[0]?.blob.type ?? "image/webp",
+    mimeType: pages[0]?.blob.type ?? "image/png",
     pages: pages.map((page) => ({
       index: page.index,
       width: page.width,

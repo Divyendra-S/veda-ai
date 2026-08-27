@@ -56,6 +56,19 @@ This buys four things:
 4. **Free progress UI.** Rasterization is per-page and observable, so the upload screen has
    something real to report before the AI work even starts.
 
+**PNG, and specifically not a lossy format.** Phase 2 briefly encoded pages as WebP at
+quality 0.92 to keep uploads small; Phase 4 reversed that on measurement. The same page of
+printed 9pt text was put to Gemini 2.5 Flash in eleven encodings: every lossless one (PNG at
+768/1024/1600px, lossless WebP) was transcribed correctly, and every lossy one (WebP
+q75–q96, JPEG q85–q100) was transcribed **wrong** — the model invented a fluent question
+paper on an entirely different subject, with plausible mark allocations and no error of any
+kind. Raising the resolution to 2200px did not help; only removing the compression did.
+Lossy ringing around glyph edges survives the model's own downscaling as noise, and a vision
+model reading noise fills in what a page like that usually says. A silent fabrication is the
+worst failure this app can have, so the pages it reads are lossless. `canvas.toBlob` offers
+no lossless WebP — quality 1.0 is still lossy VP8 — so PNG is the only option the browser
+actually gives.
+
 ### Coordinate contract
 
 Gemini returns `box_2d` as `[ymin, xmin, ymax, xmax]`, normalized to **0–1000** (not 0–1,
