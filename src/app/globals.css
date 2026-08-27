@@ -1,26 +1,142 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
+/*
+ * Design tokens sampled directly from the Figma exports in /images rather than
+ * guessed. Where a value looks oddly specific (#ff5724, #34ac15) it is because
+ * it was read off the pixels.
+ */
+@theme {
+  --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, -apple-system,
+    "Segoe UI", sans-serif;
+
+  /* Brand. Three oranges do different jobs and are not interchangeable:
+     `brand` is type and fills, `brand-ring` is the toolkit pill's outline,
+     `brand-soft` is the selected-question border on the review screen. */
+  --color-brand: #ff5724;
+  --color-brand-ring: #e36d49;
+  --color-brand-soft: #ff8d36;
+  --color-brand-wash: #f4e4da;
+
+  /* Text */
+  --color-ink: #2b2b2b;
+  --color-ink-soft: #3b3b3b;
+  --color-muted: #7e7e7e;
+  --color-faint: #a6a6a6;
+
+  /* Surfaces */
+  --color-surface: #ffffff;
+  --color-raised: #fcfcfc;
+  --color-subtle: #f0f0f0;
+  --color-well: #f5f4f4;
+  --color-panel: #e8e8e8;
+  --color-line: #cecece;
+
+  /* The answer-sheet viewer is the one dark region in the app. */
+  --color-viewer: #303030;
+  --color-viewer-raised: #454545;
+
+  /* Verdict scale. Green at full marks, amber at partial, red at zero. */
+  --color-pass: #34ac15;
+  --color-pass-bg: #f2faf1;
+  --color-warn: #e36212;
+  --color-warn-bg: #fff8ee;
+  --color-fail: #c0350a;
+  --color-fail-bg: #fff0ec;
+
+  /* Layout constants, from measuring the exports at their 1440px frame. */
+  --spacing-shell: 12px;
+  --spacing-rail: 64px;
+  --spacing-sidebar: 304px;
+  --spacing-topbar: 56px;
+
+  --radius-card: 16px;
+  --radius-panel: 24px;
+  --radius-shell: 28px;
+
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 14px rgb(0 0 0 / 0.05);
+  --shadow-panel: 0 2px 8px rgb(0 0 0 / 0.05), 0 16px 44px rgb(0 0 0 / 0.07);
+
+  --animate-shimmer: shimmer 2.4s ease-in-out infinite;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+@keyframes shimmer {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.72;
+    transform: scale(0.94);
   }
 }
 
+/*
+ * The page sits on a top-to-bottom gradient and every panel floats above it as
+ * a rounded card. Fixed to the viewport so the gradient does not repeat or
+ * stretch when a panel scrolls.
+ */
+html,
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  height: 100%;
 }
+
+body {
+  color: var(--color-ink);
+  background-color: #eeecec;
+  background-image: linear-gradient(
+    180deg,
+    #f5f5f5 0%,
+    #f1f0f0 32%,
+    #e4e2e2 70%,
+    #c8c5c5 100%
+  );
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Slim scrollbars inside panels; the design shows a thin floating handle. */
+@utility scrollbar-slim {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(0 0 0 / 0.18) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgb(0 0 0 / 0.16);
+    border-radius: 9999px;
+  }
+  &::-webkit-scrollbar-thumb:hover {
+    background-color: rgb(0 0 0 / 0.28);
+  }
+}
+
+@utility scrollbar-slim-dark {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(255 255 255 / 0.28) transparent;
+
+  &::-webkit-scrollbar {
+    width: 8px;
+  }
+  &::-webkit-scrollbar-track {
+    background: transparent;
+  }
+  &::-webkit-scrollbar-thumb {
+    background-color: rgb(255 255 255 / 0.24);
+    border-radius: 9999px;
+  }
+}
+
+/*
+ * Sidebar collapse is driven by a data attribute on <html>, set by an inline
+ * script before first paint. The markup for both states is always present and
+ * identical between server and client — only these variants decide what shows —
+ * so there is neither a flash nor a hydration mismatch.
+ */
+@custom-variant rail (html[data-sidebar="collapsed"] &);
+@custom-variant wide (html[data-sidebar="expanded"] &);
