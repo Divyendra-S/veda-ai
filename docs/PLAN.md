@@ -4,8 +4,8 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phases 0, 1 and 3 complete. Phase 2 built and type-clean; its end-to-end
-check runs with Phase 4, when there is a real paper to put through it. Phase 4 next.**
+Status: **Phases 0–4 complete**, except Phase 0's live URL, which is Phase 9's job.
+Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 5 next.**
 
 ---
 
@@ -39,30 +39,33 @@ Two decisions changed during this phase, both recorded in `ARCHITECTURE.md`:
 
 ---
 
-## Phase 1 — Design system & app shell
+## Phase 1 — Design system & app shell ✅
 
 Unblocked — the four exports landed in `/images`. Tokens were sampled from the pixels
 rather than estimated; see `DESIGN.md`.
 
 - ✅ Tailwind theme: brand oranges, ink scale, surfaces, verdict colours, radii, shadows
 - ✅ General Sans self-hosted via `next/font/local` (the typeface in the design)
-- ⬜ App shell — 12px inset, floating rounded panels on a fixed vertical gradient
-- ⬜ Sidebar, two widths: 304px expanded / 68px collapsed rail
+- ✅ App shell — 12px inset, floating rounded panels on a fixed vertical gradient
+- ✅ Sidebar, two widths: 304px expanded / 68px collapsed rail
   - Home, My Classroom, Assignments, Exams, My Library
   - **only Exams routes**; the rest are inert by design, and must *look* inert rather
     than dead — cursor, no hover lift, `aria-disabled`
   - "AI Teacher's Toolkit" pill, Settings, school card (crest + name + city)
   - collapse state persisted to `localStorage`, read before paint to avoid a flash
-- ⬜ Topbar — 56px: back button, clipboard + "Exams" breadcrumb, help, bell with dot,
+- ✅ Topbar — 56px: back button, clipboard + "Exams" breadcrumb, help, bell with dot,
   sparkle button, avatar + name + chevron
-- ⬜ Primitives: Button, Card, IconButton, ScorePill, FileChip
+- ✅ Primitives: `Button` is the only one that earned its own file. Card, IconButton and
+  FileChip each had exactly one caller, so they live at that call site rather than as
+  premature abstractions; `ScorePill` arrives with Phase 7, which is the first screen that
+  has a score to put in it.
 
 **Done when:** the shell sits next to `01-upload.png` and `03-loading.png` and matches,
 and the sidebar collapses to the rail in the loading/review screenshots.
 
 ---
 
-## Phase 2 — Upload & ingestion
+## Phase 2 — Upload & ingestion ✅
 
 The "no coordinate drift" property is established here, so this carries more weight
 than a file picker usually would.
@@ -80,19 +83,30 @@ than a file picker usually would.
   30-page cap per document, encrypted-PDF detection
 
 **Done when:** a mixed PDF + image set produces an exam row whose `question_paper` and
-`answer_sheet` hold correct page paths that render through signed URLs. — **not yet
-verified.** The code type-checks, lints and builds, but nothing has been put through it
-end to end. That check belongs with Phase 4 rather than on its own: the same upload run
-that proves the paths are right is the one that feeds the first extraction.
+`answer_sheet` hold correct page paths that render through signed URLs. — **met**, run
+end to end alongside Phase 4:
 
-Two deviations from the plan as written, both deliberate:
+```
+pages: 2 × 1600×2264
+exam:  ce81010d-814d-499f-9003-ce17fbd9189b
+paths: …/question/000.png, …/question/001.png
+upload: 4 pages via signed URLs
+  page 1: HTTP 200 179068B 1600×2264 byte-identical=true
+  page 2: HTTP 200 188034B 1600×2264 byte-identical=true
+```
 
-- **WebP at quality 0.92, with a JPEG fallback**, not PNG. A scanned page is photographic
-  in character, so WebP lands about 5× smaller with no visible loss — and page size is
-  the thing that decides whether the upload finishes on a phone tether.
+Byte-identical matters more than HTTP 200 does: it proves nothing between the encoder and
+the model re-compresses or re-samples the page, which is the property the whole coordinate
+design rests on.
+
+One deviation from the plan as written, and one reversal:
+
 - **One endpoint, not two.** Creating the row and minting the upload URLs in a single
   `POST /api/exams` means there is no window where a row exists with nowhere to put its
   pages; if signing fails, the row is deleted before the response returns.
+- **WebP q0.92 reversed back to lossless PNG.** Phase 2 chose WebP for upload size. Phase 4
+  measured it against the model and found it silently destroys extraction — see Phase 4
+  below and `lib/pdf/rasterize.ts`. Pages are PNG.
 
 The client rasterizes rather than the server for one reason worth stating plainly: the
 model and the review UI must see **the same bitmap**. Rasterizing twice — once to show
@@ -144,23 +158,81 @@ Decisions taken during the phase:
 
 ---
 
-## Phase 4 — Question extraction
+## Phase 4 — Question extraction ✅
 
-- Agent tools: `read_page`, `record_questions`, `finish`
-- Prompt work for the parts the brief grades hardest:
+- ✅ Agent tools: `read_page`, `record_questions`, `finish`
+- ✅ Prompt work for the parts the brief grades hardest:
   - every question, in **printed order**
   - labelled sub-parts as **separate entries** — `11 (a)` and `11 (b)` are two rows
   - original numbering preserved verbatim, never renumbered
   - marks captured where printed (`[5 marks]`)
-- Zod validation on every tool payload, with a repair turn on invalid output
-- Persist to `questions`. The design needs three separate label fields, which is why
-  the schema has them: `number` = `"11 (a)"` verbatim, `parent_number` = `"11"` for the
-  round badge, `part_label` = `"a"` for the small column beside it
+- ✅ Zod validation on every tool payload, with a repair turn on invalid output
+- ✅ Persist to `questions` with `number` / `parent_number` / `part_label`
+- ✅ Step runner (`lib/exam/pipeline.ts`), `POST /api/exams/[id]/run`, `GET /api/exams/[id]`
+- ✅ Review screen scaffold, polling through the three-layer query stack
 
 **Done when:** a real multi-page paper extracts with correct order and correct sub-part
-splitting, verified by eye against the PDF.
+splitting, verified by eye against the PDF. — **met.** A 2-page, 13-item Biology paper
+extracted as 14 entries, checked line by line against the source:
 
----
+| property | result |
+| --- | --- |
+| count | 14 entries from 13 printed items — `11` split into `11 (a)` and `11 (b)` |
+| order | 6 on page 1, 8 on page 2, printed order throughout |
+| numbering | copied verbatim, never renumbered |
+| marks | 2,2,2,2,2,5 / 5,5,5,5,(2,3),5,5 — every one matches the page |
+| shared stem | question 11's figure description carried into both parts, so each reads alone |
+| boxes | present on all 14; cropping the page to three of them lands on the right lines |
+
+### The finding that changed the build
+
+The first end-to-end run returned 13 fluent, well-formed questions **about business
+ethics**. The paper is Biology. Nothing errored; nothing was retried; the register looked
+entirely plausible.
+
+The cause was the page encoding, not the prompt. The same page was put to the model in
+eleven encodings:
+
+| encoding | result |
+| --- | --- |
+| PNG 1600px / 1024px / 768px | transcribed correctly |
+| WebP lossless | transcribed correctly |
+| WebP q75, q85, q92, q96 | **fabricated** |
+| JPEG q85, q92, q96, q100 | **fabricated** |
+| WebP q92 at 2200px | **fabricated** |
+
+Resolution is not the variable — 768px lossless passes and 2200px lossy fails. Lossy
+ringing around glyph edges survives the model's own downscaling as noise, and a vision
+model reading noise writes what a page like that usually says. Pages are now PNG
+(`lib/pdf/rasterize.ts`), which is the only lossless encoding `canvas.toBlob` offers.
+
+This is the single most valuable thing the phase produced. It fails silently, it is
+invisible to a spot check of the UI, and it would have looked like a bad prompt.
+
+### Decisions taken during the phase
+
+- **The agent reads one page at a time** rather than being handed the whole paper up front.
+  It costs round trips on a ~10 RPM budget, but it anchors each recording decision to a
+  single image, which is what makes "in printed order" and the per-question page attribution
+  fall out instead of being inferred. Page 1 rides along with the instructions, since the
+  model would open it first anyway.
+- **`record_questions` replaces the register for its page.** A correction is a second call
+  carrying the full corrected list, so a repair turn cannot duplicate a question.
+- **`finish` is a checkpoint, not just a terminator.** It refuses to end the run if a page
+  was never recorded, or if the model's own count disagrees with what it recorded — and it
+  refuses by returning an error payload, which hands the model a repair turn rather than
+  failing the run. A page with no questions still has to be recorded, explicitly, as empty.
+- **The label is authoritative, the decomposition is repaired.** `number` is what was read
+  off the page; `parentNumber` and `partLabel` are derived from it when it clearly carries a
+  part, because a model that reads "11 (a)" correctly will still occasionally hand back
+  `parentNumber: "11 (a)"`.
+- **Steps, not one long function.** The pipeline is a list; each step persists its output and
+  moves the stage on before the next starts, so re-entry after a serverless timeout redoes
+  one step and nothing else. A `updated_at` lease stops two tabs running the same extraction
+  twice. Phases 5 and 6 append to the list.
+- **The coordinate contract is confirmed on real output.** Cropping the page to three
+  returned boxes lands on the right lines, so `box2dToRect`'s y-first 0–1000 reading is
+  right — the thing Phase 7's highlighting depends on.
 
 ## Phase 5 — Answer extraction
 
