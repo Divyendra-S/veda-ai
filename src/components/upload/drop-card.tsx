@@ -4,6 +4,7 @@ import { useId, useRef, useState, type DragEvent } from "react";
 import { Upload, X } from "lucide-react";
 import { PdfGlyph } from "@/components/upload/pdf-glyph";
 import { cn } from "@/lib/cn";
+import { MAX_PAGES_PER_DOCUMENT } from "@/lib/exam/limits";
 import type { FileSelection } from "@/lib/upload/selection";
 import { describeSelection } from "@/lib/upload/selection";
 
@@ -111,7 +112,12 @@ export function DropCard({
             <span className="block text-[17px] font-bold text-ink">
               Upload <span className="text-brand">{title}</span>
             </span>
-            <span className="mt-1 block text-[13px] text-faint">Max 10MB</span>
+            {/* The export prints "Max 10MB". The page cap is the limit a
+                teacher will actually hit first, and one they cannot infer, so
+                it is named here rather than left to a rejection later. */}
+            <span className="mt-1 block text-[13px] text-faint">
+              Max {MAX_PAGES_PER_DOCUMENT} pages · 10MB
+            </span>
           </span>
         </label>
       )}

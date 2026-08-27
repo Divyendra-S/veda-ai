@@ -355,8 +355,32 @@ appears in a panel a screen-reader user is not looking at.
 | A page image that never finished uploading | `signPages` returns `url: null` for that page rather than throwing. The page keeps its slot at its own proportions, the numbering and every other page's highlights survive, and the placeholder says what happened |
 | The snapshot itself failing to load | An explicit panel offering a re-read, not a spinner that never resolves |
 | Corrupt / encrypted PDF | Caught during client-side rasterization, before any spend |
+| A document with too many pages | Refused at `MAX_PAGES_PER_DOCUMENT` (`lib/exam/limits.ts`, currently **2**) — in the browser before anything is rasterized, and again in the route handler. A spend control, not a technical one: nothing breaks at thirty pages, it just costs fifteen times as much. See below |
 | Box under-covers the answer | Every box is padded vertically before it is stored, because a highlight that clips reads as broken while one that over-covers reads as fine. Measured, not assumed — see Phase 5 in `PLAN.md` |
 | Marks above the question's total | Clamped to the total and rounded to a half, and the adjustment is handed back to the model in the tool result — a mark over the total usually means it has the wrong question, which it can only notice if it is told |
 | Verdict disagreeing with the marks | Not representable: `correct`/`partial`/`incorrect` is derived from awarded-vs-total. The model's own verdict is used only when the paper prints no marks to derive from |
 | Summary contradicting the marks below it | Every figure in the summary is computed from the grades; the model supplies prose only, and is forbidden to state a score in it |
 | A drawing recorded as prose | Grading credits a drawing however the transcript words it, and extraction is told to always use the `[Diagram: …]` form. Before both, one run in four deducted a mark for a diagram that the transcript plainly described — see Phase 6 in `PLAN.md` |
+
+### What a run costs
+
+Measured from this project's own `agent_traces`, on the 6-page fixture (2 question-paper
+pages, 4 answer-sheet pages, 14 questions):
+
+| agent | prompt tokens | output tokens |
+| --- | --- | --- |
+| questions (2 pages) | 9,201 | 3,104 |
+| answers (4 pages) | 22,195 | 2,805 |
+| mapping | 2,338 | 1,453 |
+| grading | 12,686 | 9,485 |
+| **total** | **46,420** | **16,847** |
+
+At `gemini-2.5-flash` list price — $0.30/M in, $2.50/M out — that is **$0.056**.
+
+The shape of that bill is the part worth knowing. Output tokens cost eight times what
+input tokens do, and mapping and grading produce 65% of them while reading no images at
+all: they scale with the **number of questions**, not the number of pages. So the page cap
+is a real guard against a 40-page scan and a poor lever on cost — halving pages saves
+around a tenth. The levers that actually move it are a paper with fewer questions and
+`GEMINI_MODEL`, which is read from the environment: `gemini-2.5-flash-lite` is roughly six
+times cheaper.

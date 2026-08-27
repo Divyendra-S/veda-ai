@@ -2,9 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createServerSupabase } from "@/lib/supabase/server";
 import { PAGE_BUCKET, extensionFor } from "@/lib/exam/storage";
-
-/** Guards the Gemini free tier against someone dropping in a 200-page scan. */
-const MAX_PAGES_PER_DOCUMENT = 30;
+import { MAX_PAGES_PER_DOCUMENT } from "@/lib/exam/limits";
 
 const pageSpec = z.object({
   index: z.number().int().min(0),

@@ -132,6 +132,10 @@ on cards, `12` on nav rows.
 
 ## Deliberate deviations
 
+- **The drop card reads `Max 2 pages · 10MB`.** The export prints `Max 10MB` only. The
+  page cap is a spend control — every page is an image the model is billed to read — and
+  it is the limit a teacher hits first and cannot infer, so it is named before the upload
+  rather than in a rejection after it.
 - **Sidebar nav items other than Exams do nothing.** The brief allows this. They are
   styled as present but inert rather than removed, because the design shows them.
 - **The user identity in the topbar is fixed** (`Madhur Rastogi`, Delhi Public School).

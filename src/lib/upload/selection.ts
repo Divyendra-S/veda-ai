@@ -1,5 +1,6 @@
-/** 10MB, matching the "Max 10MB" the design prints on each drop card. */
-export const MAX_BYTES = 10 * 1024 * 1024;
+import { MAX_BYTES, MAX_PAGES_PER_DOCUMENT } from "@/lib/exam/limits";
+
+export { MAX_BYTES, MAX_PAGES_PER_DOCUMENT };
 
 const IMAGE_TYPES = new Set(["image/png", "image/jpeg", "image/webp"]);
 
@@ -52,7 +53,30 @@ export function validate(files: File[]): string | null {
     return `That is ${formatBytes(total)}. The limit is 10MB.`;
   }
 
+  // Images are one page each and countable right here. A PDF has to be opened
+  // first, so its page count is checked by `pageProblem` once it resolves.
+  if (pdfs.length === 0 && files.length > MAX_PAGES_PER_DOCUMENT) {
+    return tooManyPages(files.length);
+  }
+
   return null;
+}
+
+/**
+ * The page cap, checked once the count is actually known.
+ *
+ * Separate from `validate` because a PDF's page count is only available after
+ * the file has been opened, and the message has to name the real number to be
+ * worth showing at all.
+ */
+export function pageProblem(pageCount: number | null): string | null {
+  if (pageCount === null) return null;
+  return pageCount > MAX_PAGES_PER_DOCUMENT ? tooManyPages(pageCount) : null;
+}
+
+function tooManyPages(pageCount: number): string {
+  const unit = MAX_PAGES_PER_DOCUMENT === 1 ? "page" : "pages";
+  return `That is ${pageCount} pages. The limit is ${MAX_PAGES_PER_DOCUMENT} ${unit} — every page is read by the AI, and every read is billed.`;
 }
 
 export function toSelection(files: File[]): FileSelection {

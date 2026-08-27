@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { DropCard } from "@/components/upload/drop-card";
 import { countPdfPages, PdfPasswordError } from "@/lib/pdf/rasterize";
 import {
+  pageProblem,
   toSelection,
   validate,
   type FileSelection,
@@ -55,13 +56,24 @@ export function UploadScreen() {
       // Opening the PDF to count pages is async, and the teacher may have
       // swapped the file by the time it resolves. Only apply the count if the
       // slot still holds the same File object.
+      //
+      // The page cap can only be checked here, once the count is known — and
+      // it has to be checked before anything is rasterized, because the point
+      // of the cap is that pages cost money to read.
       try {
         const pageCount = await countPdfPages(files[0]);
+        const problem = pageProblem(pageCount);
         setSelections((previous) =>
-          previous[side]?.files[0] === files[0]
-            ? { ...previous, [side]: { ...previous[side], pageCount } }
-            : previous,
+          previous[side]?.files[0] !== files[0]
+            ? previous
+            : {
+                ...previous,
+                [side]: problem ? null : { ...previous[side], pageCount },
+              },
         );
+        if (problem) {
+          setErrors((previous) => ({ ...previous, [side]: problem }));
+        }
       } catch (error) {
         const message =
           error instanceof PdfPasswordError
