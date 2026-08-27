@@ -78,6 +78,42 @@ export type AnswerRecord = {
  *  from `questionId` when the row is written, so the two cannot disagree. */
 export type AnswerDraft = Omit<AnswerRecord, "id" | "status">;
 
+/**
+ * One question's mark, as stored. `questionId` is the key — the table is unique
+ * on (exam, question), so there is exactly one of these per question and no
+ * separate draft type is needed.
+ *
+ * `verdict` is derived from the two mark figures rather than stored
+ * independently of them, so a pill reading "Correct" beside a score of 2/5 is
+ * not representable. See `verdictFor` in the grading agent.
+ */
+export type GradingRecord = {
+  questionId: string;
+  marksAwarded: number;
+  maxMarks: number;
+  verdict: Verdict;
+  feedback: string | null;
+};
+
+/**
+ * The whole-paper summary. Every number here is arithmetic over the gradings
+ * and is computed in code; only the three prose fields come from the model. A
+ * total that disagrees with the marks beside it is the fastest way to lose a
+ * teacher's trust in the rest of the screen.
+ */
+export type ExamSummary = {
+  totalMarks: number;
+  awardedMarks: number;
+  /** Rounded to a whole number. 0 when the paper carries no printed marks. */
+  percentage: number;
+  answered: number;
+  unanswered: number;
+  unmatched: number;
+  overallFeedback: string;
+  strengths: string[];
+  gaps: string[];
+};
+
 /** A page with a read URL minted for it. `width`/`height` travel with the URL
  *  because an overlay is positioned against the bitmap, not the viewport. */
 export type SignedPage = {
@@ -106,4 +142,6 @@ export type ExamSnapshot = {
   answerSheet: SignedDocument;
   questions: QuestionRecord[];
   answers: AnswerRecord[];
+  gradings: GradingRecord[];
+  summary: ExamSummary | null;
 };

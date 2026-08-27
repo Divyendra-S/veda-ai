@@ -4,8 +4,8 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phases 0–5 complete**, except Phase 0's live URL, which is Phase 9's job.
-Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 6 next.**
+Status: **Phases 0–6 complete**, except Phase 0's live URL, which is Phase 9's job.
+Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 7 next.**
 
 ---
 
@@ -332,18 +332,129 @@ line short at the top.
 
 ---
 
-## Phase 6 — Mapping, grading & feedback
+## Phase 6 — Mapping, grading & feedback ✅
 
-- Mapping agent, **text only** — question register + answer blocks, no images
-- Matching: written label first, semantic similarity as fallback
-- Explicit `mark_unanswered` and `mark_unmatched` calls, so both are traceable decisions
-- Grading: marks awarded vs max, verdict, per-question feedback in the voice the design
+- ✅ Mapping agent, **text only** — question register + answer blocks, no images
+- ✅ Matching: written label first, semantic similarity as fallback
+- ✅ Explicit `mark_unanswered` and `mark_unmatched` calls, so both are traceable decisions
+- ✅ Grading: marks awarded vs max, verdict, per-question feedback in the voice the design
   shows ("Excellent work! You correctly identified the chloroplast…")
-- Overall summary: total, percentage, strengths, gaps
-- Wired into the resumable step runner from `ARCHITECTURE.md` §5
+- ✅ Overall summary: total, percentage, strengths, gaps
+- ✅ Wired into the resumable step runner from `ARCHITECTURE.md` §5
 
 **Done when:** all three edge cases hold on a fixture built to contain them — answers
-out of order, a skipped question, and an answer matching nothing.
+out of order, a skipped question, and an answer matching nothing. — **met**, and by
+assertion rather than by eye. The check script re-derives every claim from the API
+snapshot and fails loudly, so "it looked right" is not something this phase can rest on.
+
+| edge case | fixture | result |
+| --- | --- | --- |
+| answered out of order | sheet reads 1, 2, 5, 3, 6, 7, 11a, 11b, 14, 9 | all ten placed on the right question |
+| skipped questions | 4, 8, 10, 12, 13 never appear | exactly those five came back unanswered |
+| answer matching nothing | `Q14.` on a paper ending at 13 | unmatched, and still on screen |
+| sub-parts kept apart | `Q11 (a).` / `Q11 (b).` | two questions, two marks, 2/2 and 3/3 |
+| page-break answer | `Q6` spans pages 2–3 | one block in, one grade out, both regions kept |
+
+Marks: 24 of 50, five unanswered, one unplaceable. Every mark is inside its question's
+total, lands on a half, and its verdict agrees with its ratio; the four summary counts and
+the percentage all recompute from the grades.
+
+### Decisions taken during the phase
+
+- **Two steps, not one agent.** `ARCHITECTURE.md` §4.3 described mapping and grading as a
+  single pass. They are separate steps, because the step runner's whole purpose is that a
+  timeout costs one step: folding them together would mean an invocation that died while
+  writing feedback also threw away the matching. Splitting them also keeps each context to
+  one job — mapping never sees a mark, grading never has to work out which answer is which
+  — and mapping can work from truncated transcripts, which grading cannot. The two stages
+  were already in the schema and in `AgentName`, so this cost no migration.
+- **The tools take lists.** The free tier paces requests at roughly one every six seconds,
+  which makes a turn, not a token, the unit that costs. One decision per call would have
+  put mapping at twenty-odd round trips. Batching does not weaken the traceable-decision
+  rule the architecture asks for — every entry is still an explicit call recorded in the
+  trace — and in practice the agent now maps, marks unmatched, marks unanswered and
+  finishes **in a single turn**, 4,175 tokens for the whole pass.
+- **Questions are addressed by their printed number, blocks by position.** The two indexes
+  diverge as soon as a question has parts: on this paper the twelfth entry is printed
+  "11 (b)" and the thirteenth is printed "12". A model handed positions will use the number
+  it can see, and the mistake is silent. Blocks have no such natural name, so they keep
+  `a1`…`aN` — and the two shapes being obviously different is what stops one being passed
+  where the other belongs.
+- **Blanks never reach the model.** A question nobody answered is zero out of its printed
+  total with the verdict `unanswered`. That is arithmetic. Sending it to be graded would
+  spend tokens to be told what we already know and invite marks for an empty page.
+- **Nothing adds up but the code.** The model writes prose and picks a mark per question;
+  the total, the percentage, and the answered/unanswered/unplaceable counts are computed
+  from the grades. The prompt forbids stating a score in the overall feedback, and the
+  check script greps for one — a headline that disagrees with the marks underneath it
+  discredits the whole screen.
+- **The verdict follows the marks.** `correct` / `partial` / `incorrect` is derived from
+  awarded-vs-total, so "Correct" beside 2/5 is not representable. The model is still asked
+  for a verdict, for the one case the ratio cannot answer: a paper that prints no marks at
+  all, where every question would otherwise read 0 out of 0 and score as correct. This is
+  the third instance of the same rule in the codebase, after an answer's `status` and the
+  measured box pad — where two fields can contradict, derive one.
+- **Marks land on a half.** 3.7 out of 5 is not a mark a teacher would write, and a model
+  reaching for one is false precision about a judgement that was never that fine.
+
+### The finding: marks drifted, and temperature was not why
+
+Grading the same script twice gave 25 and 24. The obvious suspect was the `temperature:
+0.3` used for feedback prose, so grading was rerun at 0 — twice, against an already-mapped
+exam, which is also the first thing that exercised **resuming mid-pipeline** rather than
+from the start.
+
+Zero was *worse*: 24.5 and 23. Four passes, spread 2 marks, and no correlation with
+temperature. But the per-question breakdown localised it completely — six of the nine
+answered questions were identical in all four passes, and the drift lived entirely in
+three:
+
+| question | 0.3 | 0.3 | 0 | 0 |
+| --- | --- | --- | --- | --- |
+| `"6."` | 2.5 | 2 | 2 | 1 |
+| `"7."` | 5 | 5 | 5 | **4** |
+| `"9."` | 5 | 4 | 4.5 | 5 |
+
+The 4 on question 7 came with the reason attached: *"the question asked for a drawn
+diagram, which was not provided."* The transcript for that answer begins "Nephron diagram
+— Bowman's capsule surrounds the glomerulus…". The diagram was right there.
+
+The cause was a gap between two agents, not a bad prompt in either. Answer extraction is
+told to record a drawing as `[Diagram: …]`; grading's rule about diagrams keys on that
+bracketed marker. When a transcript describes a drawing in any other words, grading is
+left to guess whether one exists — and it guessed differently each time. Both sides were
+fixed: extraction is told the bracketed form is the only form, and grading is told to
+credit a drawing however the transcript happens to word it.
+
+Three passes after the fix: **24, 25, 24**. Every question identical except `"6."`, which
+moves between 1 and 2 out of 5. The spread halved and, more to the point, moved from three
+questions to one — and the remaining one is a genuine judgement call rather than an error.
+
+### What the marking looks like now
+
+Question 6 asked for a labelled diagram of the digestive system and got prose. It scores
+1–2 out of 5, with the reason stated: *"you correctly identified the small intestine as
+the site of most absorption, but the question required a labelled diagram … which was not
+provided."* Questions 5 and 7 also asked for diagrams and now score 2/2 and 5/5 in every
+pass, because the student drew those. Marking the three differently is the correct read of
+what is on the page, and it is the kind of consistency that stays invisible without a
+fixture built to test it.
+
+### Limitations worth stating
+
+- **One question's mark is not reproducible.** Question 6 varies by a mark between runs.
+  Grading a borderline answer is a judgement, and this one is genuinely borderline; what
+  can be promised is that the six clear-cut questions do not move and that the reasoning is
+  shown next to every mark.
+- **The `[Diagram: …]` path is not exercised end to end.** The answer-sheet fixture is
+  rendered from HTML, so it cannot contain an actual drawing — "Nephron diagram —" is
+  handwritten *words*. The tightened extraction rule is therefore untested against a real
+  drawing; only the grading half of the fix is covered by these runs.
+- **A header that disagrees with the paper is ignored.** The fixture prints "Maximum Marks:
+  48" while its own questions add up to 50. The summary says 50, because it totals the
+  marks printed against each question rather than trusting a header it cannot attribute to
+  anything. That is the right behaviour — a total has to be the sum of the parts a teacher
+  can see — but the discrepancy passes without comment.
 
 ---
 

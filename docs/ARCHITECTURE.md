@@ -162,20 +162,33 @@ with jitter on 429/5xx. Every Gemini call in the app goes through it. This is tr
 core component, not error handling bolted on later — without it the app fails on exactly the
 inputs it is meant to handle.
 
-### 4.3 Three agents, one loop
+### 4.3 Four agents, one loop
 
-The same loop runs three times with different tool surfaces. Splitting them keeps each
+The same loop runs four times with different tool surfaces. Splitting them keeps each
 context small and each tool surface unambiguous:
 
 | Agent | Input | Tools | Produces |
 |---|---|---|---|
 | **Question extraction** | question paper pages (vision) | `read_page`, `record_questions`, `finish` | ordered question register |
 | **Answer extraction** | answer sheet pages (vision) | `read_page`, `record_answer_blocks`, `finish` | answer blocks + `box_2d` + transcript + any label the student wrote |
-| **Mapping + grading** | the two registers (**text only**) | `map_answer`, `mark_unanswered`, `mark_unmatched`, `record_grade`, `finish` | mapping, marks, feedback, summary |
+| **Mapping** | the two registers (**text only**) | `map_answers`, `mark_unanswered`, `mark_unmatched`, `finish` | which question each block answers |
+| **Grading** | each question with its answer (**text only**) | `record_grades`, `finish` | marks, per-question feedback, summary prose |
 
-The third agent sees **no images**, which is what makes it cheap and what lets it reason over
-the whole paper at once. Answer extraction has already done the reading; mapping is a
-text-to-text problem over two lists.
+The last two see **no images**, which is what makes them cheap and what lets them reason
+over the whole paper at once. Extraction has already done the reading; both are
+text-to-text problems over lists.
+
+Mapping and grading began as one pass and were split, for the reason the step runner
+exists at all: a serverless invocation that dies while writing feedback should not also
+throw away the matching. It costs one extra load of two small tables and buys a much
+smaller blast radius, plus two contexts that each do one job — mapping never sees a mark,
+grading never has to work out which answer is which.
+
+Every tool that records takes a **list**. The free tier paces requests at roughly one
+every six seconds, which makes a round trip, not a token, the unit that costs; one
+decision per call would put mapping at twenty-odd turns. Batching does not weaken §4.4's
+requirement that each decision be explicit — every entry is still a traced tool call — and
+in practice mapping now finishes in one turn.
 
 ### 4.4 Why mapping is a separate pass
 
@@ -185,7 +198,10 @@ Handling the brief's three edge cases falls out of this split naturally:
   student's written label (`Ans 3.`, `Q7`) first, falling back to semantic similarity.
   Position on the page is a weak hint, not the mechanism.
 - **Unanswered** — a question that no block claims. Explicit `mark_unanswered` tool call
-  rather than inferred from absence, so the model has to make a decision we can trace.
+  rather than inferred from absence, so the model has to make a decision we can trace. The
+  call is a forcing function, not a second source of truth: what reaches the database is
+  still derived from the mappings, and `finish` refuses to end a run while any question is
+  neither mapped nor explicitly marked.
 - **Unmatched** — a block that claims no question. Surfaced in its own UI section rather
   than silently dropped; a mis-extraction stays visible to the teacher.
 
@@ -206,6 +222,21 @@ GET  /api/exams/[id]/result  -> full result once complete
 `run` processes steps until the pipeline is done **or** ~240s have elapsed, then returns
 `{ done: false }`. The client immediately calls `run` again. Each completed step is
 persisted, so re-entry is idempotent and resumes where it left off.
+
+The steps are the four agents of §4.3, and a step's `stage` is also the name its traces are
+written under — one union, not two that can drift:
+
+| stage | writes | progress |
+|---|---|---|
+| `questions` | the question register | 40 |
+| `answers` | answer blocks, regions, transcripts | 70 |
+| `mapping` | `answers.question_id` and `status` | 85 |
+| `grading` | the `gradings` rows and `exams.summary` | 100 |
+
+Each step reads what the previous one persisted rather than being handed it in memory,
+because that is the path a resumed run always takes, so it is the path worth exercising on
+every run. Mapping skips its model call entirely when the sheet came back blank — every
+question is then unanswered, which grading already handles without asking anyone.
 
 Progress is written to the exam row as it happens, so the polling `GET` always reflects real
 state — the loading screen reports actual stage and page counts, not a fake animation.
@@ -281,3 +312,7 @@ container and every highlight follows automatically.
 | Serverless timeout | Step runner returns `done: false`; client re-invokes and resumes |
 | Corrupt / encrypted PDF | Caught during client-side rasterization, before any spend |
 | Box under-covers the answer | Every box is padded vertically before it is stored, because a highlight that clips reads as broken while one that over-covers reads as fine. Measured, not assumed — see Phase 5 in `PLAN.md` |
+| Marks above the question's total | Clamped to the total and rounded to a half, and the adjustment is handed back to the model in the tool result — a mark over the total usually means it has the wrong question, which it can only notice if it is told |
+| Verdict disagreeing with the marks | Not representable: `correct`/`partial`/`incorrect` is derived from awarded-vs-total. The model's own verdict is used only when the paper prints no marks to derive from |
+| Summary contradicting the marks below it | Every figure in the summary is computed from the grades; the model supplies prose only, and is forbidden to state a score in it |
+| A drawing recorded as prose | Grading credits a drawing however the transcript words it, and extraction is told to always use the `[Diagram: …]` form. Before both, one run in four deducted a mark for a diagram that the transcript plainly described — see Phase 6 in `PLAN.md` |

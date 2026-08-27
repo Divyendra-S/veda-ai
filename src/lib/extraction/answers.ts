@@ -39,7 +39,7 @@ Seven rules decide whether this is right.
 
 2. THE LABEL IS COPIED, NEVER INFERRED. Record the label the student actually wrote — "Q2.", "5)", "Ans 3" — exactly as written. If a block carries no label at all, use null. Do NOT work out from the content which question it probably answers and write that in: an invented label is worse than no label, because it will be trusted later.
 
-3. TRANSCRIBE, DO NOT CORRECT. Copy the student's own words, including their spelling, grammar and factual mistakes — the whole point is to grade what they actually wrote. Never complete a half-finished sentence and never improve an answer. If handwriting is genuinely unreadable, write [illegible] for that stretch and lower your confidence. Where the student drew something, describe the drawing and its labels in one bracketed phrase: "[Diagram: nephron, labelled Bowman's capsule, loop of Henle, collecting duct]".
+3. TRANSCRIBE, DO NOT CORRECT. Copy the student's own words, including their spelling, grammar and factual mistakes — the whole point is to grade what they actually wrote. Never complete a half-finished sentence and never improve an answer. If handwriting is genuinely unreadable, write [illegible] for that stretch and lower your confidence. Where the student drew something, record it as a bracketed phrase beginning with the word Diagram, listing what was drawn and every label on it: "[Diagram: nephron, labelled Bowman's capsule, loop of Henle, collecting duct]". Always that exact form, and always when there is a drawing — even when the drawing IS the whole answer. Writing it as ordinary prose instead loses the one signal that says the student drew rather than described, and a student who drew what they were asked for must not be marked down later because of how it was written here.
 
 4. CONTINUATIONS ACROSS A PAGE BREAK. If the writing at the top of a page carries on the answer that ran off the bottom of the previous page — it starts mid-sentence, or is marked "contd", or repeats the previous label — set continuesPrevious to true. It is a continuation, not a new answer. A block that starts a fresh answer never has continuesPrevious set, even if it happens to be the first thing on the page.
 
@@ -88,7 +88,7 @@ const blockSchema = z.object({
     .string()
     .min(1)
     .describe(
-      "The student's writing, transcribed verbatim, without the label. Drawings described in one bracketed phrase.",
+      "The student's writing, transcribed verbatim, without the label. Any drawing recorded as a bracketed phrase starting with the word Diagram.",
     ),
   box2d: box2dSchema
     .nullable()

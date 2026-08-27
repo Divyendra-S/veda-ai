@@ -7,9 +7,9 @@
  * stage forward before the next begins, which makes re-entry idempotent: a run
  * that dies halfway through a step redoes that step and nothing else.
  *
- * Steps are appended as phases land. Today the list ends at answer extraction,
- * so an exam is `done` once its register and its answers are written; mapping
- * and grading join the list in the phases that build them.
+ * The four steps are also the four agents: each one's `stage` is the name its
+ * traces are written under, which is why `StepStage` is an intersection of the
+ * two unions rather than either one alone.
  */
 
 import "server-only";
@@ -17,11 +17,18 @@ import { createServerSupabase } from "@/lib/supabase/server";
 import { createDbTracer, type AgentName, type Tracer } from "@/lib/agent/trace";
 import { extractAnswers } from "@/lib/extraction/answers";
 import { extractQuestions } from "@/lib/extraction/questions";
+import { gradeExam } from "@/lib/extraction/grading";
+import { mapAnswers } from "@/lib/extraction/mapping";
 import {
+  applyMapping,
+  loadAnswers,
   loadExam,
+  loadQuestions,
   patchExam,
   replaceAnswers,
+  replaceGradings,
   replaceQuestions,
+  saveSummary,
   type ExamRecord,
   type Supa,
 } from "@/lib/exam/repository";
@@ -50,7 +57,7 @@ type Step = {
 const STEPS: Step[] = [
   {
     stage: "questions",
-    progress: 50,
+    progress: 40,
     run: async ({ supabase, exam, tracer, signal, deadline }) => {
       const extraction = await extractQuestions({
         supabase,
@@ -75,7 +82,7 @@ const STEPS: Step[] = [
   },
   {
     stage: "answers",
-    progress: 100,
+    progress: 70,
     run: async ({ supabase, exam, tracer, signal, deadline }) => {
       const extraction = await extractAnswers({
         supabase,
@@ -89,6 +96,55 @@ const STEPS: Step[] = [
       // goes unanswered — so unlike the question register, an empty list here
       // is recorded rather than treated as a failed extraction.
       await replaceAnswers(supabase, exam.id, extraction.answers);
+    },
+  },
+  {
+    stage: "mapping",
+    progress: 85,
+    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+      const [questions, answers] = await Promise.all([
+        loadQuestions(supabase, exam.id),
+        loadAnswers(supabase, exam.id),
+      ]);
+
+      // Nothing was written on the sheet. There is no matching to do and no
+      // reason to spend a model call finding that out — every question falls
+      // through to grading as unanswered, which is the correct outcome.
+      if (answers.length === 0) return;
+
+      const mapping = await mapAnswers({
+        questions,
+        answers,
+        tracer,
+        signal,
+        budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
+      });
+
+      await applyMapping(supabase, exam.id, mapping.pairs);
+    },
+  },
+  {
+    stage: "grading",
+    progress: 100,
+    run: async ({ supabase, exam, tracer, signal, deadline }) => {
+      // Re-read rather than carrying the mapping across from the previous
+      // step: the two steps have to work in separate invocations anyway, so
+      // reading what was persisted is the path that is always exercised.
+      const [questions, answers] = await Promise.all([
+        loadQuestions(supabase, exam.id),
+        loadAnswers(supabase, exam.id),
+      ]);
+
+      const result = await gradeExam({
+        questions,
+        answers,
+        tracer,
+        signal,
+        budgetMs: Math.max(15_000, deadline - Date.now() - 10_000),
+      });
+
+      await replaceGradings(supabase, exam.id, result.gradings);
+      await saveSummary(supabase, exam.id, result.summary);
     },
   },
 ];

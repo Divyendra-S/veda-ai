@@ -1,14 +1,27 @@
-import type { AnswerRecord } from "@/lib/exam/types";
+import type { AnswerRecord, QuestionRecord } from "@/lib/exam/types";
 
 /**
  * The extracted answers, in the order they were written.
  *
  * The region count is shown rather than hidden because it is the visible proof
- * of the one thing this pass has to get right that a transcript alone will not
+ * of the one thing extraction has to get right that a transcript alone will not
  * show: an answer that ran across a page break is one answer with two regions,
- * not two answers. Phase 6 fills in which question each of these belongs to.
+ * not two answers.
+ *
+ * The question each block was matched to is shown here too, and so is the fact
+ * that a block matched nothing. A block the pipeline could not place is the
+ * case most likely to be wrong, so it is the one that must not be quietly
+ * dropped from the list.
  */
-export function AnswerList({ answers }: { answers: AnswerRecord[] }) {
+export function AnswerList({
+  answers,
+  questions = [],
+}: {
+  answers: AnswerRecord[];
+  questions?: QuestionRecord[];
+}) {
+  const byId = new Map(questions.map((question) => [question.id, question]));
+
   return (
     <ol className="flex flex-col gap-2.5">
       {answers.map((answer, index) => (
@@ -35,6 +48,11 @@ export function AnswerList({ answers }: { answers: AnswerRecord[] }) {
               </span>
             ) : null}
           </div>
+          <p className="mt-1 text-[12px] font-medium text-muted">
+            {answer.questionId
+              ? `answers question ${byId.get(answer.questionId)?.number ?? "?"}`
+              : "matches no question on this paper"}
+          </p>
           <p className="mt-1.5 whitespace-pre-line text-[14px] leading-relaxed text-ink-soft">
             {answer.transcript}
           </p>

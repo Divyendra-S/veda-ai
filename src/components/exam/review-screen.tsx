@@ -9,13 +9,14 @@ import { useExamPipeline } from "@/hooks/use-exam-pipeline";
 import type { ExamStage } from "@/lib/exam/types";
 
 /**
- * The review screen, as far as Phases 4 and 5 take it: what was extracted on
- * the left, the answer sheet with its regions drawn on it on the right, and the
- * loading and error states in between. Phase 7 replaces it with the designed
- * version — selection, score pills, AI feedback, the zoomable viewer and
+ * The review screen, as far as Phases 4 to 6 take it: what was extracted and
+ * what it scored on the left, the answer sheet with its regions drawn on it on
+ * the right, and the loading and error states in between. Phase 7 replaces it
+ * with the designed version — selection, score pills, the zoomable viewer and
  * click-to-highlight. What is here already proves the parts those depend on:
  * the poll reflects real stage, a private page renders through a signed URL at
- * the size the model saw, and a normalised box lands on the right handwriting.
+ * the size the model saw, a normalised box lands on the right handwriting, and
+ * the marks on screen add up to the total printed above them.
  */
 
 const STAGE_TITLES: Record<ExamStage, string> = {
@@ -61,6 +62,46 @@ export function ReviewScreen({ examId }: { examId: string }) {
     <div className="flex flex-1 gap-3 overflow-hidden">
       <section className="flex min-w-0 flex-1 flex-col rounded-panel bg-surface shadow-card">
         <div className="scrollbar-slim flex-1 overflow-y-auto">
+          {exam.summary ? (
+            <div className="border-b border-line/60 bg-well px-5 py-4">
+              <div className="flex items-baseline gap-3">
+                <span className="text-[28px] font-bold leading-none tracking-[-0.02em] text-ink tabular-nums">
+                  {exam.summary.awardedMarks}
+                  <span className="text-[18px] text-muted">
+                    /{exam.summary.totalMarks}
+                  </span>
+                </span>
+                <span className="text-[15px] font-semibold tabular-nums text-brand">
+                  {exam.summary.percentage}%
+                </span>
+                <span className="ml-auto text-[13px] tabular-nums text-muted">
+                  {exam.summary.answered} answered · {exam.summary.unanswered}{" "}
+                  skipped · {exam.summary.unmatched} unplaceable
+                </span>
+              </div>
+              <p className="mt-2 text-[14px] leading-relaxed text-ink-soft">
+                {exam.summary.overallFeedback}
+              </p>
+              {exam.summary.strengths.length > 0 ||
+              exam.summary.gaps.length > 0 ? (
+                <dl className="mt-2.5 grid gap-1 text-[13px] leading-relaxed sm:grid-cols-2">
+                  <div>
+                    <dt className="font-semibold text-pass">Strengths</dt>
+                    <dd className="text-muted">
+                      {exam.summary.strengths.join(" · ") || "—"}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt className="font-semibold text-warn">To work on</dt>
+                    <dd className="text-muted">
+                      {exam.summary.gaps.join(" · ") || "—"}
+                    </dd>
+                  </div>
+                </dl>
+              ) : null}
+            </div>
+          ) : null}
+
           <header className="sticky top-0 z-10 flex items-baseline justify-between border-b border-line/60 bg-surface px-5 py-4">
             <h1 className="text-[17px] font-semibold text-ink">
               Extracted Questions
@@ -73,7 +114,7 @@ export function ReviewScreen({ examId }: { examId: string }) {
             </span>
           </header>
           <div className="p-4">
-            <QuestionList questions={exam.questions} />
+            <QuestionList questions={exam.questions} gradings={exam.gradings} />
           </div>
 
           <header className="sticky top-0 z-10 flex items-baseline justify-between border-y border-line/60 bg-surface px-5 py-4">
@@ -88,7 +129,7 @@ export function ReviewScreen({ examId }: { examId: string }) {
             </span>
           </header>
           <div className="p-4">
-            <AnswerList answers={exam.answers} />
+            <AnswerList answers={exam.answers} questions={exam.questions} />
           </div>
         </div>
       </section>

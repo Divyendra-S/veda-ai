@@ -11,8 +11,11 @@ import type {
   DocumentMeta,
   ExamStage,
   ExamStatus,
+  ExamSummary,
+  GradingRecord,
   QuestionDraft,
   QuestionRecord,
+  Verdict,
 } from "@/lib/exam/types";
 
 export type Supa = SupabaseClient<Database>;
@@ -26,9 +29,17 @@ export type ExamRecord = {
   updatedAt: string;
   questionPaper: DocumentMeta;
   answerSheet: DocumentMeta;
+  summary: ExamSummary | null;
 };
 
-export type { AnswerDraft, AnswerRecord, QuestionDraft, QuestionRecord };
+export type {
+  AnswerDraft,
+  AnswerRecord,
+  ExamSummary,
+  GradingRecord,
+  QuestionDraft,
+  QuestionRecord,
+};
 
 export async function loadExam(
   supabase: Supa,
@@ -36,7 +47,7 @@ export async function loadExam(
 ): Promise<ExamRecord | null> {
   const { data, error } = await supabase
     .from("exams")
-    .select("id, status, stage, progress, error, updated_at, question_paper, answer_sheet")
+    .select("id, status, stage, progress, error, updated_at, question_paper, answer_sheet, summary")
     .eq("id", id)
     .maybeSingle();
 
@@ -54,6 +65,9 @@ export async function loadExam(
     updatedAt: data.updated_at,
     questionPaper: documentMetaSchema.parse(data.question_paper),
     answerSheet: documentMetaSchema.parse(data.answer_sheet),
+    // Written by this app in one place and never by hand, so it is read back
+    // as-is rather than re-validated on every poll.
+    summary: (data.summary as ExamSummary | null) ?? null,
   };
 }
 
@@ -169,7 +183,7 @@ export async function replaceAnswers(
       transcript: draft.transcript,
       regions: draft.regions,
       confidence: draft.confidence,
-      status: draft.questionId ? "mapped" : "unmatched",
+      status: statusFor(draft.questionId),
     })),
   );
   if (error) throw new Error(`Could not save answers: ${error.message}`);
@@ -213,4 +227,117 @@ function readingOrder(answer: AnswerRecord): number {
   const first = answer.regions[0];
   if (!first) return Number.MAX_SAFE_INTEGER;
   return first.pageIndex * 1001 + first.box2d[0];
+}
+
+/**
+ * "Unmatched" is not a third state an agent can set — it is what having no
+ * question *means*. Deriving it in one function keeps `status` and
+ * `question_id` from ever telling different stories, whether the row is being
+ * inserted by extraction or updated by mapping.
+ */
+function statusFor(questionId: string | null): AnswerStatus {
+  return questionId ? "mapped" : "unmatched";
+}
+
+/**
+ * Writes the mapping decisions onto the answers that already exist.
+ *
+ * An update rather than a rewrite: the transcript, the regions and the
+ * confidence are answer extraction's output and mapping has no business
+ * touching them. Only the two fields that say which question this answers move.
+ *
+ * Answers the agent never mentioned are left exactly as they are, which for a
+ * fresh run means `null` / "unmatched" — the safe default, since an answer we
+ * failed to place still has to reach the teacher rather than disappear.
+ */
+export async function applyMapping(
+  supabase: Supa,
+  examId: string,
+  pairs: { answerId: string; questionId: string | null }[],
+): Promise<void> {
+  const results = await Promise.all(
+    pairs.map(({ answerId, questionId }) =>
+      supabase
+        .from("answers")
+        .update({ question_id: questionId, status: statusFor(questionId) })
+        .eq("id", answerId)
+        // Scoped to the exam as well as the id: an id from the wrong run can
+        // then only match nothing, never another exam's answer.
+        .eq("exam_id", examId),
+    ),
+  );
+
+  const failed = results.find((result) => result.error);
+  if (failed?.error) {
+    throw new Error(`Could not save the mapping: ${failed.error.message}`);
+  }
+}
+
+/**
+ * Replaces every grade for the exam. Delete-then-insert on the same grounds as
+ * the other two registers, and here it also sidesteps the unique index on
+ * (exam, question): a re-run cannot collide with its own previous attempt.
+ */
+export async function replaceGradings(
+  supabase: Supa,
+  examId: string,
+  gradings: GradingRecord[],
+): Promise<void> {
+  const { error: deleteError } = await supabase
+    .from("gradings")
+    .delete()
+    .eq("exam_id", examId);
+  if (deleteError) {
+    throw new Error(`Could not clear gradings: ${deleteError.message}`);
+  }
+  if (gradings.length === 0) return;
+
+  const { error } = await supabase.from("gradings").insert(
+    gradings.map((grading) => ({
+      exam_id: examId,
+      question_id: grading.questionId,
+      marks_awarded: grading.marksAwarded,
+      max_marks: grading.maxMarks,
+      verdict: grading.verdict,
+      feedback: grading.feedback,
+    })),
+  );
+  if (error) throw new Error(`Could not save gradings: ${error.message}`);
+}
+
+/**
+ * Gradings come back keyed by question, unordered: the review screen renders
+ * them beside the question register, which already carries the printed order,
+ * so sorting them here would be sorting the same thing twice.
+ */
+export async function loadGradings(
+  supabase: Supa,
+  examId: string,
+): Promise<GradingRecord[]> {
+  const { data, error } = await supabase
+    .from("gradings")
+    .select("question_id, marks_awarded, max_marks, verdict, feedback")
+    .eq("exam_id", examId);
+
+  if (error) throw new Error(`Could not load gradings: ${error.message}`);
+
+  return (data ?? []).map((row) => ({
+    questionId: row.question_id,
+    marksAwarded: Number(row.marks_awarded),
+    maxMarks: Number(row.max_marks),
+    verdict: row.verdict as Verdict,
+    feedback: row.feedback,
+  }));
+}
+
+export async function saveSummary(
+  supabase: Supa,
+  examId: string,
+  summary: ExamSummary,
+): Promise<void> {
+  const { error } = await supabase
+    .from("exams")
+    .update({ summary, updated_at: new Date().toISOString() })
+    .eq("id", examId);
+  if (error) throw new Error(`Could not save the summary: ${error.message}`);
 }
