@@ -4,7 +4,8 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phase 0 complete. Phase 1 in progress.**
+Status: **Phases 0, 1 and 3 complete. Phase 2 built and type-clean; its end-to-end
+check runs with Phase 4, when there is a real paper to put through it. Phase 4 next.**
 
 ---
 
@@ -66,38 +67,80 @@ and the sidebar collapses to the rail in the loading/review screenshots.
 The "no coordinate drift" property is established here, so this carries more weight
 than a file picker usually would.
 
-- Two dashed drop cards side by side inside a `#f5f4f4` well — Question Paper | Answer
-  Sheet — drag-and-drop, multi-file, PDF + images
-- Filled state: file chip with PDF glyph, name, `2MB • 2 Pages`, and a dark circular ×
-  that clears just that side
-- `Start Mapping →` is disabled grey until **both** sides hold a file, then goes to ink
-- Client-side rasterization via `pdfjs-dist` → PNG at 1600px width; image uploads are
+- ✅ Two dashed drop cards side by side inside a `#f5f4f4` well — Question Paper |
+  Answer Sheet — drag-and-drop, multi-file, PDF + images
+- ✅ Filled state: file chip with PDF glyph, name, `2MB • 2 Pages`, and a dark circular
+  × that clears just that side
+- ✅ `Start Mapping →` is disabled grey until **both** sides hold a file, then goes to ink
+- ✅ Client-side rasterization via `pdfjs-dist` at 1600px width; image uploads are
   downscaled to the same contract, so everything downstream sees one `PageImage[]` shape
-- `POST /api/exams/upload-urls` mints signed upload URLs; the browser PUTs pages
-  directly to Storage with real per-page progress
-- `POST /api/exams` creates the row and returns an id
-- Validation: file type, 10MB cap per the design's own label, page-count cap,
-  encrypted-PDF detection
+- ✅ `POST /api/exams` creates the row **and** mints one signed upload URL per page; the
+  browser PUTs pages straight to Storage, three at a time
+- ✅ Validation: file type, mixed-format rejection, 10MB cap per the design's own label,
+  30-page cap per document, encrypted-PDF detection
 
 **Done when:** a mixed PDF + image set produces an exam row whose `question_paper` and
-`answer_sheet` hold correct page paths that render through signed URLs.
+`answer_sheet` hold correct page paths that render through signed URLs. — **not yet
+verified.** The code type-checks, lints and builds, but nothing has been put through it
+end to end. That check belongs with Phase 4 rather than on its own: the same upload run
+that proves the paths are right is the one that feeds the first extraction.
+
+Two deviations from the plan as written, both deliberate:
+
+- **WebP at quality 0.92, with a JPEG fallback**, not PNG. A scanned page is photographic
+  in character, so WebP lands about 5× smaller with no visible loss — and page size is
+  the thing that decides whether the upload finishes on a phone tether.
+- **One endpoint, not two.** Creating the row and minting the upload URLs in a single
+  `POST /api/exams` means there is no window where a row exists with nowhere to put its
+  pages; if signing fails, the row is deleted before the response returns.
+
+The client rasterizes rather than the server for one reason worth stating plainly: the
+model and the review UI must see **the same bitmap**. Rasterizing twice — once to show
+the teacher, once to send to Gemini — is how a bounding box ends up 4px off.
 
 ---
 
-## Phase 3 — Agent core
+## Phase 3 — Agent core ✅
 
 Pure infrastructure, no product behaviour. Built and tested on its own because
 everything after depends on it, and debugging it through the UI would be miserable.
 
-- `lib/agent/loop.ts` — turn loop, function-call dispatch, trace events
-- `lib/agent/tools.ts` — tool registry: Zod schema → Gemini declaration → typed handler
-- `lib/agent/limiter.ts` — token bucket + jittered backoff (the free tier is ~10 RPM)
-- `lib/agent/trace.ts` — persist turns to `agent_traces`
-- Budgets: `maxTurns`, `budgetMs`, per-tool timeout
-- A scratch script that runs a trivial two-tool agent end to end
+- ✅ `lib/agent/loop.ts` — turn loop, function-call dispatch, trace events
+- ✅ `lib/agent/tools.ts` — tool registry: Zod schema → Gemini declaration → typed handler
+- ✅ `lib/agent/limiter.ts` — token bucket + jittered backoff (the free tier is ~10 RPM)
+- ✅ `lib/agent/trace.ts` — persist turns to `agent_traces`
+- ✅ `lib/gemini/client.ts` — cached client, `gemini-2.5-flash`, `GEMINI_MODEL` override
+- ✅ Budgets: `maxTurns`, `budgetMs`, per-tool timeout
+- ✅ Harness at `/api/dev/agent-smoke` (404s in production)
 
 **Done when:** the scratch agent completes a multi-turn tool conversation, and an
-induced 429 storm is absorbed by the limiter instead of failing the run.
+induced 429 storm is absorbed by the limiter instead of failing the run. — **met**,
+all four checks green:
+
+| check | proves |
+| --- | --- |
+| limiter | 3 synthetic 429s absorbed, `retryDelay` hint honoured, a 400 still propagates |
+| dispatch | bad arguments and unknown tools come back as a `functionResponse` carrying `error`, so the model gets a repair turn instead of the run failing |
+| trace | batched writes land in `agent_traces`, and a 400KB inline image is redacted to a byte count before it can reach a row |
+| agent | 2 round trips, parallel calls in one turn, terminal tool → result |
+
+Decisions taken during the phase:
+
+- **Zod is the only schema.** Gemini's `parametersJsonSchema` accepts plain JSON
+  Schema, so `z.toJSONSchema()` feeds the declaration and the same schema validates
+  the response. Writing an OpenAPI blob for the model and a validator for the handler
+  is how tool arguments silently drift.
+- **The model's `Content` is replayed verbatim**, never rebuilt from the parsed text
+  and calls. Thinking models attach `thoughtSignature` to their parts and lose their
+  own reasoning across a tool call if it is dropped.
+- **Tool results can carry attachments.** A `functionResponse` is JSON-only, so a
+  handler returning a page image emits it as a separate user turn. Proven with a real
+  PNG the model had to look at, because Phase 4's `read_page` depends on it.
+- **`agent_traces.agent` widened to include `grading`** (`0002_grading_trace_agent.sql`),
+  so Phase 6 does not have to migrate mid-build.
+- The harness is a dev-gated route rather than a node script: it runs in the real
+  Next.js runtime, so `server-only`, path aliases and env loading are all exercised as
+  they will be in production.
 
 ---
 
