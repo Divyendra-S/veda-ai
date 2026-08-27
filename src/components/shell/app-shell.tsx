@@ -17,8 +17,12 @@ export function AppShell({
   section?: string;
 }) {
   return (
-    <div className="flex h-dvh gap-2 p-2 sm:gap-4 sm:p-(--spacing-shell)">
-      <Sidebar />
+    <div className="flex h-dvh gap-3 p-3 sm:gap-4 sm:p-(--spacing-shell)">
+      {/* No sidebar on a phone: the design's phone frame drops it entirely and
+          moves the brand into the topbar, where a hamburger opens the nav. The
+          rail would otherwise spend a sixth of a 390px screen on items that do
+          nothing. */}
+      <Sidebar className="hidden sm:flex" />
       <div className="flex min-w-0 flex-1 flex-col gap-3">
         <Topbar section={section} />
         <main className="flex min-h-0 flex-1 flex-col">{children}</main>

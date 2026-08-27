@@ -6,19 +6,24 @@
  * it was read off the pixels.
  */
 @theme {
-  --font-sans: var(--font-general-sans), ui-sans-serif, system-ui, -apple-system,
+  --font-sans: var(--font-bricolage), ui-sans-serif, system-ui, -apple-system,
     "Segoe UI", sans-serif;
 
   /* Brand. Three oranges do different jobs and are not interchangeable:
      `brand` is type and fills, `brand-ring` is the toolkit pill's outline,
-     `brand-soft` is the selected-question border on the review screen. */
+     `brand-soft` is the selected-question border on the review screen.
+     `brand-ring` is #e36d49 because that is what the design *renders*: the
+     Figma node's stroke reads #ff7950, but it sits at ~88% over the pill's
+     #272727 fill, and 0.88 of #ff7950 over #272727 is exactly #e36d49 — which
+     is what a pixel scan of the export returns. The width was the real bug
+     there, not the colour: the stroke is 4px, and had been 2. */
   --color-brand: #ff5724;
   --color-brand-ring: #e36d49;
   --color-brand-soft: #ff8d36;
   --color-brand-wash: #f4e4da;
 
   /* Text */
-  --color-ink: #2b2b2b;
+  --color-ink: #303030;
   --color-ink-soft: #3b3b3b;
   --color-muted: #7e7e7e;
   --color-faint: #a6a6a6;
@@ -31,6 +36,8 @@
   --color-panel: #f3f3f3;
   --color-inset: #f6f6f6;
   --color-badge: #555555;
+  /* The toolkit pill's fill — a shade darker than `ink`, per the design. */
+  --color-toolkit: #272727;
   --color-line: #cecece;
 
   /* The answer-sheet viewer is the one dark region in the app. */
@@ -63,7 +70,9 @@
 
   --radius-card: 16px;
   --radius-panel: 24px;
-  --radius-shell: 28px;
+  /* The floating panels are 16px, not the 28px guessed earlier — the Side Bar
+     node says `rounded-[16px]` and a corner scan of the export agrees. */
+  --radius-shell: 16px;
 
   --shadow-card: 0 1px 2px rgb(0 0 0 / 0.04), 0 4px 14px rgb(0 0 0 / 0.05);
   --shadow-panel: 0 2px 8px rgb(0 0 0 / 0.05), 0 16px 44px rgb(0 0 0 / 0.07);
@@ -108,6 +117,9 @@ body {
 
 body {
   color: var(--color-ink);
+  /* Every Paragraph token in the design is -4%, so this is the typeface's
+     setting rather than a per-element flourish. Headings tighten further. */
+  letter-spacing: -0.04em;
   background-color: #eeecec;
   background-image: linear-gradient(
     180deg,

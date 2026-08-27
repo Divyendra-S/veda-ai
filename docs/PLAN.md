@@ -46,7 +46,7 @@ Unblocked — the four exports landed in `/images`. Tokens were sampled from the
 rather than estimated; see `DESIGN.md`.
 
 - ✅ Tailwind theme: brand oranges, ink scale, surfaces, verdict colours, radii, shadows
-- ✅ General Sans self-hosted via `next/font/local` (the typeface in the design)
+- ✅ Bricolage Grotesque self-hosted via `next/font/google` (the typeface the Figma tokens name)
 - ✅ App shell — 12px inset, floating rounded panels on a fixed vertical gradient
 - ✅ Sidebar, two widths: 304px expanded / 68px collapsed rail
   - Home, My Classroom, Assignments, Exams, My Library

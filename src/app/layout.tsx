@@ -1,22 +1,27 @@
 import type { Metadata } from "next";
-import localFont from "next/font/local";
+import { Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { Providers } from "./providers";
 import { SIDEBAR_INIT_SCRIPT } from "@/components/shell/use-sidebar";
 
 /**
- * General Sans (Fontshare, ITF Free Font License) is the typeface in the Figma
- * design — identifiable by the double-story `a`, single-story `g`, angled `t`
- * terminal and the `Q` whose tail swings out to the lower left.
+ * Bricolage Grotesque is the typeface the design is actually set in. The Figma
+ * file names it outright in its own tokens — every Paragraph style is
+ * `Bricolage Grotesque` at 1.4 line-height and -4% tracking — and it is what
+ * the flared stems and squared-off bowls in the exports are. The earlier guess
+ * was read off the pixels and was wrong.
  *
- * Self-hosted rather than CDN-linked: next/font inlines the @font-face and
- * preloads the file, so there is no render-blocking round trip to a third party
- * and no layout shift. One variable file covers 200-700 in 38KB.
+ * `next/font/google` self-hosts: the file is fetched once at build time, served
+ * from our own origin and preloaded, so nothing about it costs a render-
+ * blocking round trip to Google or a layout shift at runtime.
+ *
+ * No `axes`. The design pins `opsz 14, wdth 100`, and those are this font's own
+ * default axis values, so the weight-only variable file already renders exactly
+ * what Figma draws — while staying the smaller download.
  */
-const generalSans = localFont({
-  src: "./fonts/GeneralSans-Variable.woff2",
-  variable: "--font-general-sans",
-  weight: "200 700",
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-bricolage",
   display: "swap",
   fallback: ["ui-sans-serif", "system-ui", "sans-serif"],
 });
@@ -31,7 +36,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
   return (
     <html
       lang="en"
-      className={`${generalSans.variable} h-full`}
+      className={`${bricolage.variable} h-full`}
       suppressHydrationWarning
     >
       <head>

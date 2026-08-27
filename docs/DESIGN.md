@@ -1,7 +1,9 @@
 # Design reference
 
-Everything here was measured off the four exports in `/images` with ImageMagick, not
-estimated by eye. The tokens live in `src/app/globals.css` under `@theme`.
+Everything here was measured off the exports in `/images`, not estimated by eye —
+with ImageMagick for the four desktop frames, and by scanning pixel rows through a
+canvas for the phone frame that arrived later. The tokens live in
+`src/app/globals.css` under `@theme`.
 
 | Export | Screen |
 | --- | --- |
@@ -9,18 +11,31 @@ estimated by eye. The tokens live in `src/app/globals.css` under `@theme`.
 | `Upload Screen - filled state.png` | Page 1, both files chosen, CTA enabled |
 | `Loading state.png` | `Extracting…`, sidebar collapsed to the rail |
 | `Question - Answer mapping screen.png` | Page 2, question list + answer viewer |
+| `Question - Answer mapping screen - Question toggle (phone).png` | Page 2 at 393px, one question open |
 
-Exports are 2x. All numbers below are **design pixels** at the 1440px frame.
+The desktop exports are 2x; the phone export is 1x at 393px. All numbers below are
+**design pixels** at the 1440px frame unless a phone frame is named.
 
 ---
 
 ## Typeface
 
-General Sans (Fontshare, ITF Free Font License). Identified from the letterforms:
-double-story `a`, single-story `g`, angled cut on the `t` terminal, and a `Q` whose
-tail swings out to the lower left — none of which match the obvious Google-font
-candidates. Self-hosted through `next/font/local` as a single 38KB variable file
-covering 200–700.
+**Bricolage Grotesque**, self-hosted through `next/font/google` (which downloads at
+build time and serves from our own origin — no runtime request to Google).
+
+This was identified from the file rather than from the pixels. An earlier pass read
+the letterforms off the exports and concluded General Sans; the Figma file's own
+typography tokens say otherwise, naming `Bricolage Grotesque` in every Paragraph
+style. Reading the tokens settled in one call what staring at antialiased type had
+got wrong.
+
+The design pins the variable axes at `opsz 14, wdth 100`, which are the font's own
+defaults, so the weight-only subset renders exactly what Figma draws without paying
+for the extra axes.
+
+**Tracking is part of the typeface here, not a per-element flourish.** Every
+Paragraph token carries -4%, so it sits on `body` as `letter-spacing: -0.04em` and
+headings tighten from there — the wordmark is -6% at 28px, matching the node.
 
 ---
 
@@ -33,7 +48,7 @@ Sampled values, with the job each one does.
 | Token | Value | Used for |
 | --- | --- | --- |
 | `brand` | `#ff5724` | Headline accent, `Question Paper` / `Answer Sheet` labels |
-| `brand-ring` | `#e36d49` | Outline on the AI Teacher's Toolkit pill |
+| `brand-ring` | `#e36d49` | 4px outline on the AI Teacher's Toolkit pill |
 | `brand-soft` | `#ff8d36` | 2px border on the selected question card |
 | `brand-wash` | `#f4e4da` | Marker highlight behind the headline |
 
@@ -106,11 +121,41 @@ Measured by scanning pixel rows and columns for panel edges.
 | Upload well | 785 wide, 200 tall, centred |
 | Drop card | 374 wide, 168 tall, 16 gap between the two |
 | Headline highlight pill | 58 tall |
-| Hero ring | ~130 diameter |
+| Hero ring | 109 of visible peach, inside a 139 box |
 | Review panels | roughly 50/50 of the space beside the rail |
 
-Radii: `28` on the sidebar and outer shells, `24` on panels and the upload well, `16`
-on cards, `12` on nav rows.
+Radii: `16` on the sidebar, topbar and outer shells, `24` on panels and the upload
+well, `16` on cards, `8` on nav rows.
+
+The shell radius is a correction. It was `28` on the strength of an eyeballed guess;
+the Side Bar node states `rounded-[16px]`, and fitting a circle to the export's own
+corner — solving `r` from how far in the first white pixel sits on each of the first
+few rows — returns 15–16 on both the sidebar and the topbar. Both are now `16`.
+
+**The AI Teacher's Toolkit pill**, from the same node, since it is the sidebar's most
+prominent control and every value in it was slightly off:
+
+| Property | Was | Design |
+| --- | --- | --- |
+| Stroke width | 2 | **4** |
+| Stroke colour | `#e36d49` | `#ff7950` at ~88% over the fill — *renders* `#e36d49` |
+| Height | 48 | **42** |
+| Fill | `ink` | `#272727` |
+| Label | 15 | **16**, and a `’` rather than `'` |
+
+The stroke colour is the one place where the file and the export disagree and the
+export wins: `#ff7950` is the unblended value, and 0.88 of it over `#272727` is
+`#e36d49` to the digit — which is what a pixel scan of the pill returns. So the
+colour had been right all along and the **width** was the actual bug.
+
+Its inner glow is fitted rather than copied. Figma states a 34.5px blur; a sweep of
+blur × alpha against the export scored 24px at 0.22 as the closest match, because a
+Figma Gaussian and a CSS one are not the same curve. From a pixel or so inside the
+stroke inward it now tracks the export to within a level or two of grey.
+
+The sparkle is the design's exported path, not Lucide's `Sparkles`: the design puts a
+small companion star above and right of the main one, Lucide puts a dot below and
+left, and at 18px on that pill the difference reads.
 
 ---
 
@@ -157,6 +202,24 @@ on cards, `12` on nav rows.
 - **Blocks that match no question get a section of their own** below the register, and
   highlight exactly as a question does. Also absent from the export, and the case most
   likely to be wrong — so it is the one thing that must not be quietly dropped.
+- **The upload screen says its limits in one line.** An earlier draft explained the
+  page cap and the tier-1 pacing in two paragraphs under the drop cards. Together they
+  were 125px tall, and the frame is 1440x787: they pushed `Start Mapping` off the
+  bottom of the design's own screen and off any 768px laptop. Both facts still get
+  said — the cap on the cards themselves, the pacing on the processing screen after 45
+  seconds, which is the moment it starts to matter. A primary action you have to
+  scroll to find is the worse trade.
+- **The sidebar is at its rail from `Start Mapping` onward.** Both frames for the
+  second half of the app — extracting, and the mapping screen — draw the rail, and the
+  upload frame draws it expanded. So it is the screen that asks rather than the teacher
+  who chose: `setSidebar(true, { persist: false })` on submit and on the review screen's
+  mount moves the attribute without writing storage, the toggle still overrides it, and
+  the upload screen opens expanded next time.
+- **A collapsed question row clamps to three lines.** Every row in both exports is one
+  to three lines, because the paper they were drawn from asks short questions. A real
+  CBSE paper does not: an assertion-and-reason item prints all four options and turns a
+  card into a ten-line wall. The chevron — which already opens the answer and the
+  feedback — opens the rest of the question with them.
 - **The processing screen gains a determinate bar.** The export shows the sparkle, the
   title and `This may take a while` and nothing else. The brief asks for processing
   progress and the exam row already carries a real `progress` figure, so the bar reads it
@@ -170,14 +233,15 @@ on cards, `12` on nav rows.
 
 ## Narrow screens
 
-The exports are one 1440px frame. Two breakpoints carry everything below it.
+The desktop exports are one 1440px frame and there is one phone frame at 393px. Two
+breakpoints carry everything between and below them.
 
 | Width | What changes |
 | --- | --- |
 | `< 64rem` (1024) | The two review panes become one, with a tab switch above them. The sidebar is forced to its rail and stops offering a toggle. |
-| `< 40rem` (640) | The two drop cards stack. Headline drops 38 → 26px, the hero 126 → 92px, the shell inset 12 → 8px. The topbar's teacher name and the question panel's `(from question paper)` drop out. |
+| `< 40rem` (640) | The sidebar goes entirely; the brand moves into the topbar and a hamburger opens it as a drawer. The question row rearranges. The two drop cards stack. Headline drops 38 → 26px, the hero 139 → 101px. The topbar loses the teacher's name, the breadcrumb, Help and the assistant button; the question panel loses `Expand All`. |
 
-Three decisions inside that:
+Six decisions inside that:
 
 - **The rail below 64rem is not the teacher's stored preference.** The `rail:` variant
   matches on the viewport there instead of on `data-sidebar`, so the attribute keeps
@@ -185,6 +249,23 @@ Three decisions inside that:
 - **Selecting a question on one pane takes you to the sheet**, because otherwise the
   highlight is drawn on a panel nobody can see. The switch goes back and the viewer has
   kept its place: the hidden pane is only `display: none`.
+- **The phone frame arrived after the desktop ones and overruled two guesses.** It
+  keeps `(from question paper)`, which had been dropped as the first thing a narrow
+  header could lose — on a phone it is the sentence that says this list is the paper's
+  questions and not the student's headings, which is exactly the context a small screen
+  gives you least of. And it drops `Expand All`, which had been kept: the full title
+  takes the width on its own there, and a button beside it wraps the heading onto two
+  lines.
+- **The phone question row rearranges rather than shrinks.** Number and mark share a
+  line with the chevron; the question runs the full width underneath. Squeezed into one
+  row instead, the text gets about 120px, which is three words a line. One set of
+  children says both layouts — `flex-wrap` with `order-last basis-full` on the text,
+  `ml-auto` on the pill, `items-start` on the row so the chevron stays level with the
+  number — and `sm:flex-nowrap` collapses it back to the row the desktop frame draws.
+- **There is no rail on a phone.** 68px is a sixth of a 390px screen and every item in
+  it but Exams is inert, so the design spends it on the panes instead. The drawer the
+  hamburger opens is the same set of items, with the same ones disabled, because the
+  point of it is to be the sidebar rather than a second, smaller idea of one.
 - **The drop cards are `min-h` with the grow deferred to `sm:`.** `flex-1` in a column
   resolves against the height, where `basis: 0` beats a fixed `h-[184px]` and collapses
   both cards to nothing — see `PLAN.md` Phase 8.

@@ -3,18 +3,19 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ChevronsRight, PanelLeft, Settings, Sparkles } from "lucide-react";
+import { ChevronsRight, PanelLeft, Settings } from "lucide-react";
 import crest from "@/assets/brand/school-crest.png";
 import { LogoMark } from "@/components/brand/logo-mark";
+import { SparkleMark } from "@/components/brand/sparkle-mark";
 import { NAV_ITEMS, type NavItem } from "@/components/shell/nav-items";
 import { useSidebar } from "@/components/shell/use-sidebar";
 import { cn } from "@/lib/cn";
 
 const ROW =
-  "flex h-10 items-center gap-3 rounded-xl px-3 text-[15px] transition-colors " +
+  "flex h-10 items-center gap-2 rounded-lg px-3 text-[16px] transition-colors " +
   "rail:mx-auto rail:size-10 rail:justify-center rail:gap-0 rail:px-0";
 
-export function Sidebar() {
+export function Sidebar({ className }: { className?: string }) {
   const { collapsed, toggle } = useSidebar();
   const pathname = usePathname();
 
@@ -22,14 +23,15 @@ export function Sidebar() {
     <aside
       className={cn(
         "flex shrink-0 flex-col overflow-hidden bg-surface shadow-card",
-        "w-(--spacing-sidebar) rounded-[28px] px-6 pt-6 pb-6",
+        "w-(--spacing-sidebar) rounded-shell px-6 pt-6 pb-6",
         "rail:w-(--spacing-rail) rail:px-2",
         "transition-[width] duration-200 ease-out",
+        className,
       )}
     >
       <div className="flex items-center gap-2.5 rail:justify-center">
         <LogoMark className="size-10" />
-        <span className="text-[21px] font-bold tracking-[-0.02em] text-ink rail:hidden">
+        <span className="text-[28px] leading-5 font-bold tracking-[-0.06em] text-ink rail:hidden">
           VedaAI
         </span>
         <button
@@ -46,16 +48,22 @@ export function Sidebar() {
       <button
         type="button"
         className={cn(
-          "mt-[53px] flex items-center justify-center gap-2 rounded-full border-2 border-brand-ring bg-ink",
-          "h-12 text-[15px] font-medium text-white transition-transform active:scale-[0.99]",
+          "mt-14 flex items-center justify-center gap-2.5 rounded-full border-4 border-brand-ring bg-toolkit",
+          "h-[42px] text-[16px] font-medium text-white transition-transform active:scale-[0.99]",
+          // The inner glow keeps the dark pill from reading flat. Figma states a
+          // 34.5px blur, but its Gaussian and the CSS one are not the same
+          // curve: swept against the export, 24px is the blur whose falloff
+          // actually lands on the design's — matching it to within a level or
+          // two of grey from a pixel or so inside the stroke inward.
+          "shadow-[inset_0_-1px_3.5px_rgba(177,177,177,0.6),inset_0_0_24px_rgba(255,255,255,0.22)]",
           "rail:mx-auto rail:size-10 rail:p-0",
         )}
       >
-        <Sparkles className="size-[18px] shrink-0 fill-white" strokeWidth={0} />
-        <span className="rail:hidden">AI Teacher&apos;s Toolkit</span>
+        <SparkleMark className="rail:mx-auto" />
+        <span className="rail:hidden">AI Teacher’s Toolkit</span>
       </button>
 
-      <nav className="mt-[52px] flex flex-col gap-1.5">
+      <nav className="mt-14 flex flex-col gap-2">
         {NAV_ITEMS.map((item) => (
           <NavRow
             key={item.label}
@@ -65,28 +73,28 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="mt-auto flex flex-col gap-3 pt-8">
+      <div className="mt-auto flex flex-col gap-2 pt-8">
         <button
           type="button"
           disabled
           title="Not part of this prototype"
           className={cn(ROW, "text-muted disabled:cursor-default rail:hidden")}
         >
-          <Settings className="size-[22px] shrink-0" strokeWidth={1.8} />
+          <Settings className="size-5 shrink-0" strokeWidth={1.8} />
           <span>Settings</span>
         </button>
 
-        <div className="flex items-center gap-2.5 rounded-2xl bg-subtle p-3 rail:mx-auto rail:rounded-xl rail:p-1.5">
+        <div className="flex items-center gap-2 rounded-2xl bg-subtle p-3 rail:mx-auto rail:rounded-xl rail:p-1.5">
           <Image
             src={crest}
             alt=""
-            className="size-12 shrink-0 object-contain rail:size-9"
+            className="h-[60px] w-[59px] shrink-0 object-contain rail:size-9"
           />
           <span className="min-w-0 rail:hidden">
-            <span className="block truncate text-[15px] font-semibold text-ink">
+            <span className="block truncate text-[16px] font-bold text-ink">
               Delhi Public School
             </span>
-            <span className="block truncate text-[13px] text-muted">
+            <span className="block truncate text-[14px] text-muted">
               Bokaro Steel City
             </span>
           </span>
@@ -115,7 +123,7 @@ function NavRow({ item, active }: { item: NavItem; active: boolean }) {
   const Icon = item.icon;
   const content = (
     <>
-      <Icon className="size-[22px] shrink-0" strokeWidth={1.8} />
+      <Icon className="size-5 shrink-0" strokeWidth={1.8} />
       <span className="rail:hidden">{item.label}</span>
     </>
   );

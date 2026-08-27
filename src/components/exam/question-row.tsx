@@ -50,14 +50,22 @@ export function QuestionRow({
         row.isPart && !row.startsGroup && "ml-7",
       )}
     >
-      <div className="flex items-center gap-3 p-3">
+      {/* Two layouts out of one set of children, because the phone frame
+          rearranges rather than shrinks: there the number and the mark sit on a
+          line of their own with the chevron, and the question runs the full
+          width underneath. `flex-wrap` plus `order`/`basis` says that without a
+          second copy of the markup, and `sm:flex-nowrap` collapses it back to
+          the single row the desktop frame draws. `items-start` is what keeps
+          the chevron level with the number rather than floating halfway down a
+          two-line card. */}
+      <div className="flex items-start gap-3 p-3 sm:items-center">
         <button
           type="button"
           data-row
           onClick={onSelect}
           aria-pressed={selected}
           aria-label={`Question ${question.number}`}
-          className="flex min-w-0 flex-1 cursor-pointer items-center gap-3 rounded-[10px] text-left outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand"
+          className="flex min-w-0 flex-1 cursor-pointer flex-wrap items-center gap-x-3 gap-y-2.5 rounded-[10px] text-left outline-offset-4 focus-visible:outline-2 focus-visible:outline-brand sm:flex-nowrap sm:gap-y-0"
         >
           <span
             className={cn(
@@ -74,11 +82,30 @@ export function QuestionRow({
             </span>
           ) : null}
 
-          <span className="min-w-0 flex-1 text-[14px] leading-[1.55] text-ink-soft">
+          {/* Every row in the export is one to three lines, and the paper it
+              was drawn from asks short questions. A real one does not: an
+              assertion-and-reason question prints its four options in full and
+              turns a card into a wall, which is a list nobody scans. So the
+              collapsed row keeps the design's rhythm and the chevron — which
+              already opens the answer and the feedback — opens the rest of the
+              question with them. Nothing is hidden that a click does not
+              return. */}
+          <span
+            className={cn(
+              "order-last min-w-0 basis-full text-[14px] leading-[1.55] text-ink-soft sm:order-none sm:basis-auto",
+              // The export's rows are one to three lines because its paper asks
+              // short questions. A real one prints all four options of an
+              // assertion-and-reason item and turns the card into a wall, so a
+              // collapsed row keeps the design's rhythm and the chevron — which
+              // already opens the answer and the feedback — opens the rest of
+              // the question with them.
+              !expanded && "line-clamp-3",
+            )}
+          >
             {question.text}
           </span>
 
-          <ScorePill grading={grading} />
+          <ScorePill grading={grading} className="ml-auto sm:ml-0" />
         </button>
 
         <button

@@ -107,16 +107,23 @@ export function QuestionPanel({
         <div className="flex items-center gap-3">
           <h1 className="mr-auto min-w-0 text-[16px] font-semibold text-ink">
             Extracted Questions{" "}
-            <span className="font-normal text-muted max-sm:hidden">
-              (from question paper)
-            </span>
+            {/* The phone frame keeps this, so it stays — it is the sentence
+                that says the list is the paper's questions and not the
+                student's headings, which is exactly the thing a small screen
+                gives you least context to work out. */}
+            <span className="font-normal text-muted">(from question paper)</span>
           </h1>
           <button
             type="button"
             onClick={() =>
               setExpanded(allExpanded ? new Set() : new Set(keys))
             }
-            className="shrink-0 cursor-pointer rounded-[14px] bg-surface px-4 py-2 text-[14px] font-medium text-ink shadow-card transition-colors hover:bg-subtle"
+            // Absent from the phone frame, and it has to be: the full title
+            // takes the width there on its own, and a button beside it wraps
+            // the heading onto two lines. Every row still has its chevron, and
+            // opening all fourteen on a phone is a scroll rather than an
+            // overview anyway.
+            className="hidden shrink-0 cursor-pointer rounded-[14px] bg-surface px-4 py-2 text-[14px] font-medium text-ink shadow-card transition-colors hover:bg-subtle sm:block"
           >
             {allExpanded ? "Collapse All" : "Expand All"}
           </button>

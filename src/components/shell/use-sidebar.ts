@@ -29,6 +29,32 @@ function getServerSnapshot() {
 }
 
 /**
+ * Sets the visual state directly.
+ *
+ * `persist: false` is the interesting case and the one the review screen uses:
+ * the design's own frames show the sidebar expanded while uploading and at the
+ * rail from the moment Start Mapping is pressed, because from there on the two
+ * panes need the 304px more than the nav needs its labels. That is a property
+ * of the screen, not a preference — so it moves the attribute without touching
+ * what the teacher last chose, and their choice comes back on the next load of
+ * a screen that has room for it.
+ */
+export function setSidebar(collapsed: boolean, { persist = true } = {}) {
+  const value = collapsed ? "collapsed" : "expanded";
+  if (document.documentElement.dataset.sidebar === value) return;
+  document.documentElement.dataset.sidebar = value;
+  if (persist) {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, value);
+    } catch {
+      // Private browsing or a blocked storage partition. The toggle still works
+      // for this session; it just will not be remembered.
+    }
+  }
+  for (const listener of listeners) listener();
+}
+
+/**
  * The *visual* state lives in the `data-sidebar` attribute on <html> and is
  * styled through the `rail:` variant, so React never renders two different
  * trees and there is nothing to mismatch on hydration. Below 64rem that
@@ -46,17 +72,7 @@ export function useSidebar() {
     getServerSnapshot,
   );
 
-  const toggle = useCallback(() => {
-    const value = getSnapshot() ? "expanded" : "collapsed";
-    document.documentElement.dataset.sidebar = value;
-    try {
-      localStorage.setItem(SIDEBAR_KEY, value);
-    } catch {
-      // Private browsing or a blocked storage partition. The toggle still works
-      // for this session; it just will not be remembered.
-    }
-    for (const listener of listeners) listener();
-  }, []);
+  const toggle = useCallback(() => setSidebar(!getSnapshot()), []);
 
   return { collapsed, toggle };
 }

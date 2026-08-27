@@ -18,10 +18,10 @@ Core flow: **Question Extraction → Answer Extraction → Answer Mapping → Gr
 
 | Concern | Choice | Why |
 |---|---|---|
-| Framework | Next.js 15, App Router, TypeScript | Recommended by the brief; API routes + SSR in one deploy |
+| Framework | Next.js 16, App Router, TypeScript | Recommended by the brief; API routes + SSR in one deploy |
 | Styling | Tailwind CSS v4 | Fast, matches a Figma handoff cleanly |
 | Client data | TanStack Query (React Query) | Polling the job status is the main client concern |
-| AI | Gemini `gemini-3.7-flash` via `@google/genai` | Free tier; native spatial grounding (`box_2d`) |
+| AI | Gemini `gemini-2.5-flash` via `@google/genai` | Free tier; native spatial grounding (`box_2d`) |
 | Storage | Supabase Storage | Page images must outlive a stateless serverless invocation |
 | State | Supabase Postgres | Job state must survive across polling requests |
 | Validation | Zod | One schema drives both the Gemini response contract and the DB write |
@@ -230,7 +230,7 @@ POST /api/exams/[id]/run?retry=1 -> the same, but resume an exam already in erro
 GET  /api/exams/[id]          -> current status + partial results (React Query polls this)
 ```
 
-`run` processes steps until the pipeline is done **or** ~240s have elapsed, then returns
+`run` processes steps until the pipeline is done **or** ~255s have elapsed, then returns
 `{ done: false }`. The client immediately calls `run` again. Each completed step is
 persisted, so re-entry is idempotent and resumes where it left off.
 

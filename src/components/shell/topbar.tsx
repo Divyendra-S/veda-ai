@@ -2,24 +2,30 @@
 
 import Image from "next/image";
 import { useRouter } from "next/navigation";
+import { useState } from "react";
 import {
   ArrowLeft,
   Bell,
   ChevronDown,
   Clipboard,
   HelpCircle,
+  Menu,
   Sparkles,
 } from "lucide-react";
 import avatar from "@/assets/brand/avatar.png";
+import { cn } from "@/lib/cn";
+import { LogoMark } from "@/components/brand/logo-mark";
+import { MobileNav } from "@/components/shell/mobile-nav";
 
 /** Presentational only — this app has no authentication. See docs/DESIGN.md. */
 const TEACHER = "Madhur Rastogi";
 
 export function Topbar({ section = "Exams" }: { section?: string }) {
   const router = useRouter();
+  const [menu, setMenu] = useState(false);
 
   return (
-    <header className="flex h-(--spacing-topbar) shrink-0 items-center gap-3 rounded-[22px] bg-raised px-5 shadow-card">
+    <header className="flex h-(--spacing-topbar) shrink-0 items-center gap-2.5 rounded-shell bg-raised px-3.5 shadow-card sm:gap-3 sm:px-5">
       <button
         type="button"
         onClick={() => router.back()}
@@ -29,13 +35,24 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
         <ArrowLeft className="size-[18px]" strokeWidth={2} />
       </button>
 
-      <span className="flex min-w-0 items-center gap-2 text-[15px] text-muted">
+      {/* The phone frame swaps the breadcrumb for the brand, because with no
+          sidebar beside it the topbar is the only place the app says its own
+          name. From `sm` up the sidebar carries the brand and this goes back to
+          saying where you are. */}
+      <span className="flex min-w-0 items-center gap-2 sm:hidden">
+        <LogoMark className="size-9 shrink-0" />
+        <span className="truncate text-[19px] font-bold tracking-[-0.02em] text-ink">
+          VedaAI
+        </span>
+      </span>
+
+      <span className="hidden min-w-0 items-center gap-2 text-[15px] text-muted sm:flex">
         <Clipboard className="size-[18px] shrink-0" strokeWidth={1.8} />
         <span className="truncate">{section}</span>
       </span>
 
       <div className="ml-auto flex shrink-0 items-center gap-1.5">
-        <IconButton label="Help">
+        <IconButton label="Help" className="hidden sm:grid">
           <HelpCircle className="size-[19px]" strokeWidth={1.8} />
         </IconButton>
 
@@ -49,7 +66,7 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
         <button
           type="button"
           aria-label="Assistant"
-          className="grid size-9 place-items-center rounded-full border border-black/8 bg-white text-ink transition-colors hover:bg-subtle"
+          className="hidden size-9 cursor-pointer place-items-center rounded-full border border-black/8 bg-white text-ink transition-colors hover:bg-subtle sm:grid"
         >
           <Sparkles className="size-[18px] fill-ink" strokeWidth={0} />
         </button>
@@ -66,25 +83,45 @@ export function Topbar({ section = "Exams" }: { section?: string }) {
           <span className="hidden text-[15px] font-medium text-ink sm:block">
             {TEACHER}
           </span>
-          <ChevronDown className="size-4 text-muted" strokeWidth={2} />
+          <ChevronDown
+            className="hidden size-4 text-muted sm:block"
+            strokeWidth={2}
+          />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setMenu(true)}
+          aria-label="Open menu"
+          aria-expanded={menu}
+          className="ml-0.5 grid size-9 cursor-pointer place-items-center rounded-full text-ink transition-colors hover:bg-subtle sm:hidden"
+        >
+          <Menu className="size-[21px]" strokeWidth={2} />
         </button>
       </div>
+
+      <MobileNav open={menu} onClose={() => setMenu(false)} />
     </header>
   );
 }
 
 function IconButton({
   label,
+  className,
   children,
 }: {
   label: string;
+  className?: string;
   children: React.ReactNode;
 }) {
   return (
     <button
       type="button"
       aria-label={label}
-      className="grid size-9 place-items-center rounded-full text-ink transition-colors hover:bg-subtle"
+      className={cn(
+        "grid size-9 cursor-pointer place-items-center rounded-full text-ink transition-colors hover:bg-subtle",
+        className,
+      )}
     >
       {children}
     </button>

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useLayoutEffect, useMemo, useState } from "react";
 import { AlertTriangle, FileText, ImageIcon, RotateCw } from "lucide-react";
 import { ProcessingPanel } from "@/components/processing-panel";
 import { Button } from "@/components/ui/button";
@@ -11,6 +11,7 @@ import {
 } from "@/components/exam/answer-sheet-panel";
 import { QuestionPanel } from "@/components/exam/question-panel";
 import { useExamPipeline } from "@/hooks/use-exam-pipeline";
+import { setSidebar } from "@/components/shell/use-sidebar";
 import { useMediaQuery } from "@/hooks/use-media-query";
 import { cn } from "@/lib/cn";
 import {
@@ -70,6 +71,14 @@ const STAGE_SURVIVES: Partial<Record<ExamStage, string>> = {
 const NARROW = "(max-width: 1023.98px)";
 
 export function ReviewScreen({ examId }: { examId: string }) {
+  // Both frames the design gives for this half of the app — the extracting
+  // screen and the mapping screen — show the sidebar at its rail, and the
+  // upload frame shows it expanded. So the rail is what this screen asks for
+  // rather than what the teacher last picked; the toggle still overrides it,
+  // and nothing is written to storage, so the upload screen opens expanded
+  // next time exactly as the design has it.
+  useLayoutEffect(() => setSidebar(true, { persist: false }), []);
+
   const { exam, isLoading, error, retry, reload } = useExamPipeline(examId);
   const narrow = useMediaQuery(NARROW);
   const [selectedKey, setSelectedKey] = useState<string | null>(null);

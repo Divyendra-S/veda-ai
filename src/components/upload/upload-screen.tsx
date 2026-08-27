@@ -7,6 +7,7 @@ import { useMutation } from "@tanstack/react-query";
 import { AlertTriangle, ArrowRight } from "lucide-react";
 import hero from "@/assets/brand/hero-teacher.png";
 import { ProcessingPanel } from "@/components/processing-panel";
+import { setSidebar } from "@/components/shell/use-sidebar";
 import { Button } from "@/components/ui/button";
 import { DropCard } from "@/components/upload/drop-card";
 import { countPdfPages, PdfPasswordError } from "@/lib/pdf/rasterize";
@@ -130,6 +131,10 @@ export function UploadScreen() {
   }, [handleSelect]);
 
   const submit = useMutation({
+    // The design's extracting frame is at the rail while the upload frame is
+    // expanded, so the press itself is the moment the sidebar gives way. Not
+    // persisted: it is this screen asking, not the teacher choosing.
+    onMutate: () => setSidebar(true, { persist: false }),
     mutationFn: () =>
       submitExam({
         questionPaper: selections.question!,
@@ -174,7 +179,7 @@ export function UploadScreen() {
         src={hero}
         alt=""
         priority
-        className="mt-6 size-[92px] object-contain sm:mt-8 sm:size-[126px]"
+        className="mt-6 size-[101px] object-contain sm:mt-8 sm:size-[139px]"
       />
 
       <div className="mt-6 flex w-full max-w-[785px] flex-col gap-3 rounded-panel bg-well p-2 sm:mt-7 sm:flex-row sm:gap-4">
@@ -200,49 +205,29 @@ export function UploadScreen() {
         />
       </div>
 
-      {/* Neither of these is a technical limit and neither is guessable, so
-          both are stated with their reason rather than sprung later — the cap
-          as a rejection, the wait as a screen that looks stuck. */}
-      <p className="mt-3 max-w-[560px] px-2 text-center text-[13px] leading-relaxed text-faint">
-        Up to {MAX_PAGES_PER_DOCUMENT} pages per file. Every page is an image
-        the AI is billed to read, so the cap keeps a run to a few cents — it is
-        a spending limit, not a technical one. Expect about a minute and a half
-        from here: this runs on a tier-1 Gemini key, so requests are paced
-        rather than fired all at once.
-      </p>
-
-      <p className="mt-2 max-w-[560px] px-2 text-center text-[13px] leading-relaxed text-faint">
-        No paper to hand?{" "}
+      {/* One line, and deliberately one line. The design frame is 1440x787
+          and everything here is centred in it: a second paragraph of prose
+          pushes Start Mapping below the fold on any 768px-tall laptop, and a
+          primary action you have to scroll to find is a worse trade than a
+          shorter sentence. The two things this used to say still get said —
+          the page cap on the cards themselves, the tier-1 pacing on the
+          processing screen at the moment the wait starts to feel wrong. */}
+      <p className="mt-3.5 max-w-[860px] px-2 text-center text-[13px] leading-relaxed text-faint">
+        Up to {MAX_PAGES_PER_DOCUMENT} pages per file — every page is an image
+        the AI is billed to read. No paper to hand?{" "}
         <button
           type="button"
           onClick={loadSample}
           disabled={loadingSample}
-          className="font-medium text-brand underline underline-offset-2 disabled:opacity-60"
+          className="cursor-pointer font-medium text-brand underline underline-offset-2 disabled:opacity-60"
         >
           {loadingSample ? "Loading the sample…" : "Load a real sample pair"}
-        </button>{" "}
-        — a CBSE Class X Science 2024 paper with a student&apos;s handwritten
-        booklet for it. Or download{" "}
-        <a
-          className="underline underline-offset-2"
-          href="/samples/question-paper.pdf"
-          download
-        >
-          the paper
-        </a>{" "}
-        and{" "}
-        <a
-          className="underline underline-offset-2"
-          href="/samples/answer-sheet.pdf"
-          download
-        >
-          the answer sheet
-        </a>
+        </button>
         .
       </p>
 
       <Button
-        className="mt-8 sm:mt-11"
+        className="mt-7 sm:mt-9"
         disabled={!ready}
         onClick={() => submit.mutate()}
       >
