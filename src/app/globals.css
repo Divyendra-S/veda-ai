@@ -28,20 +28,32 @@
   --color-raised: #fcfcfc;
   --color-subtle: #f0f0f0;
   --color-well: #f5f4f4;
-  --color-panel: #e8e8e8;
+  --color-panel: #f3f3f3;
+  --color-inset: #f6f6f6;
+  --color-badge: #555555;
   --color-line: #cecece;
 
   /* The answer-sheet viewer is the one dark region in the app. */
   --color-viewer: #303030;
   --color-viewer-raised: #454545;
 
-  /* Verdict scale. Green at full marks, amber at partial, red at zero. */
+  /* The region drawn over the handwriting: a 2px border, a wash of the same
+     green over the paper, and a solid tab carrying the question number. The
+     wash was solved from the export by comparing paper above the border with
+     paper below it. */
+  --color-highlight: #3dd218;
+  --color-highlight-tab: #34ac15;
+
+  /* Score-pill scale, sampled off the pills in the review export rather than
+     off the earlier screens: green from 80%, amber below it, red at zero. That
+     threshold is the design's and not grading's — 4/5 is a "partial" verdict
+     and still a green pill. */
   --color-pass: #34ac15;
-  --color-pass-bg: #f2faf1;
-  --color-warn: #e36212;
-  --color-warn-bg: #fff8ee;
+  --color-pass-bg: #ecf8ea;
+  --color-warn: #e3600f;
+  --color-warn-bg: #fff5e6;
   --color-fail: #c0350a;
-  --color-fail-bg: #fff0ec;
+  --color-fail-bg: #ffe9e2;
 
   /* Layout constants, from measuring the exports at their 1440px frame. */
   --spacing-shell: 12px;
@@ -57,6 +69,19 @@
   --shadow-panel: 0 2px 8px rgb(0 0 0 / 0.05), 0 16px 44px rgb(0 0 0 / 0.07);
 
   --animate-shimmer: shimmer 2.4s ease-in-out infinite;
+  --animate-reveal: reveal 0.9s ease-out;
+}
+
+/* Fired when a highlight is scrolled to, so the eye lands on the right box
+   even when several are on screen. It rings the box rather than moving it:
+   nothing shifts, so the ripple cannot be mistaken for the region itself. */
+@keyframes reveal {
+  from {
+    box-shadow: 0 0 0 0 rgb(61 210 24 / 0.5);
+  }
+  to {
+    box-shadow: 0 0 0 16px rgb(61 210 24 / 0);
+  }
 }
 
 @keyframes shimmer {

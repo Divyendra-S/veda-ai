@@ -47,23 +47,37 @@ Sampled values, with the job each one does.
 | `faint` | `#a6a6a6` | `Max 10MB`, disabled label |
 | `surface` | `#ffffff` | Sidebar, cards |
 | `raised` | `#fcfcfc` | Topbar |
-| `subtle` | `#f0f0f0` | Active nav row, school card, feedback well |
+| `subtle` | `#f0f0f0` | Active nav row, school card |
 | `well` | `#f5f4f4` | The container the two drop zones sit in |
-| `panel` | `#e8e8e8` | Question-list panel behind the cards |
+| `panel` | `#f3f3f3` | Question-list panel behind the cards |
+| `inset` | `#f6f6f6` | Feedback well, chevron button, page chips |
+| `badge` | `#555555` | The round question-number badge |
 | `line` | `#cecece` | Dashed drop-zone border, disabled CTA fill |
 | `viewer` | `#303030` | Answer-sheet viewer |
 | `viewer-raised` | `#454545` | Zoom and page controls inside the viewer |
+| `highlight` | `#3dd218` | Border of the region drawn on the answer sheet |
+| `highlight-tab` | `#34ac15` | The `Q2` tab above that border |
 
-**Verdict scale** — pill background / text:
+Four of these were re-measured during Phase 7 against the review-screen export and
+disagree with what the earlier screens suggested: `panel` was recorded as `#e8e8e8`,
+the feedback well was assumed to be `subtle`, the number badge was assumed to be `ink`,
+and the pill backgrounds were a shade too light. The values above are the corrected
+ones; `docs/PLAN.md` Phase 7 keeps the before-and-after.
 
-| Verdict | Background | Text |
+**Score-pill scale** — pill background / text, sampled off the pills themselves:
+
+| Pill | Background | Text |
 | --- | --- | --- |
-| Full marks | `#f2faf1` | `#34ac15` |
-| Partial | `#fff8ee` | `#e36212` |
-| Zero | `#fff0ec` | `#c0350a` |
+| Full marks | `#ecf8ea` | `#34ac15` |
+| Partial | `#fff5e6` | `#e3600f` |
+| Zero | `#ffe9e2` | `#c0350a` |
+| Not attempted | `inset` `#f6f6f6` | `muted` `#7e7e7e` |
 
 Observed thresholds: `4/5` and `5/5` render green, `3/5` and `1/3` amber, `0/2` red.
-So green at 80% or above, red at zero, amber in between.
+So green at 80% or above, red at zero, amber in between — which is the design's scale
+and not grading's, where 4/5 is a `partial` verdict. The fourth row is ours: the export
+has no example of a question nobody attempted, and painting a blank page red reads as
+marks thrown away rather than marks never attempted.
 
 **Page background** is a fixed vertical gradient, not flat:
 
@@ -71,9 +85,10 @@ So green at 80% or above, red at zero, amber in between.
 linear-gradient(180deg, #f5f5f5 0%, #f1f0f0 32%, #e4e2e2 70%, #c8c5c5 100%)
 ```
 
-**Answer highlight.** The green fill is translucent — solving the composite against
-the paper underneath gives roughly `rgb(52 172 21 / 0.12)`. The border is a brighter
-`#3dd218`, and the `Q2` tab above the top-left corner is solid `#34ac15`.
+**Answer highlight.** The border is `#3dd218`, 2px. The fill is the same green at
+roughly 10% — solved by comparing paper a few rows above the border with paper a few
+rows below it, which is the only pair close enough for the ruled lines underneath not
+to dominate the difference. The `Q2` tab above the top-left corner is solid `#34ac15`.
 
 ---
 
@@ -123,3 +138,18 @@ on cards, `12` on nav rows.
   There is no authentication in this app, so it is presentation only.
 - **Layout flexes rather than pinning to 1440.** The exports are a fixed frame; a
   reviewer opens a live URL at an arbitrary width.
+- **The expanded row shows the transcript as well as the feedback.** The export's one
+  open row is a two-mark multiple choice, where what the student wrote is not worth
+  repeating. On a five-mark answer it is the thing a teacher wants beside the mark, and
+  the brief asks for the extracted answers to be displayed, so `What the student wrote`
+  sits above `AI Feedback` in the same well.
+- **The whole-paper feedback opens closed.** It is several paragraphs and the questions
+  are what the screen is for, so it collapses to a single truncated line under the score
+  strip. The numbers a teacher scans for are in the strip itself.
+- **A question nobody attempted still gets a row**, with a grey pill and, when expanded,
+  a sentence saying nothing on the sheet was matched to it. The viewer says the same and
+  stays where it is. The export has no such case; a silently missing question is the
+  failure a teacher would never catch.
+- **Blocks that match no question get a section of their own** below the register, and
+  highlight exactly as a question does. Also absent from the export, and the case most
+  likely to be wrong — so it is the one thing that must not be quietly dropped.

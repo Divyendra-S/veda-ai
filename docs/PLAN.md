@@ -4,7 +4,7 @@ Nine phases. Each ends at a state you can look at and judge, so we can course-co
 before the next one starts. See `ARCHITECTURE.md` for the system design and
 `DESIGN.md` for the tokens and geometry measured off the Figma exports.
 
-Status: **Phases 0–6 complete**, except Phase 0's live URL, which is Phase 9's job.
+Status: **Phases 0–7 complete**, except Phase 0's live URL, which is Phase 9's job.
 Phase 2's end-to-end check ran with Phase 4 and passed. **Phase 7 next.**
 
 ---
@@ -458,29 +458,123 @@ fixture built to test it.
 
 ---
 
-## Phase 7 — Review UI & highlighting
+## Phase 7 — Review UI & highlighting ✅
 
 The screen the assignment is actually judged on.
 
-- Left panel: `Extracted Questions (from question paper)` + `Expand All`
-  - each row: dark round number badge, optional part letter, question text, score pill,
-    chevron
-  - score pill colour is derived, not stored: full marks green, zero red, anything
-    between amber
-  - expanding a row reveals an **AI Feedback** block in a `#f0f0f0` well
-  - the selected row takes a 2px `#ff8d36` border and its badge turns brand orange
-- Right panel: dark `#303030` viewer — `Answer Sheet`, `− 100% +` zoom, `‹ Page n of N ›`
-  - continuous vertical scroll through all pages, not a pager
-- Highlight overlay per page positioned via `box2dToRect`, drawn as a translucent green
-  fill with a `#3dd218` border and a `#34ac15` `Q2` tab above its top-left corner
-- Click a question → scroll its region into view and animate the highlight
-- Multi-page answers → one overlay per region, plus page chips to jump between them
-- Unanswered questions → explicit empty state, no viewer scroll
-- Unmatched answers → their own section, clickable, highlights the same way
-- Grading summary in the header
+- ✅ Left panel: `Extracted Questions (from question paper)` + `Expand All`
+- ✅ Each row: `#555555` round number badge, part letter column, question text, score
+  pill, chevron
+- ✅ Score-pill colour derived from the ratio, not stored: green from 80%, amber below,
+  red at zero, grey for a question nobody attempted
+- ✅ Expanding a row reveals the student's transcript and an **AI Feedback** well
+- ✅ The selected row takes a 2px `#ff8d36` border and its badge turns brand orange
+- ✅ Right panel: dark `#303030` viewer — `Answer Sheet`, `− 100% +` zoom,
+  `‹ Page n of N ›`, continuous scroll
+- ✅ Highlight per region: `#3dd218` border over a wash of the same green, `#34ac15` tab
+  above the top-left corner
+- ✅ Click a question → its regions are drawn, the first is scrolled to and ringed
+- ✅ Multi-page answers → one overlay per region, tabs numbered `1/2`, page chips in the
+  expanded row
+- ✅ Unanswered questions → an explicit empty state on both sides, and the viewer stays put
+- ✅ Unmatched answers → their own section, clickable, highlighting the same way
+- ✅ Grading summary in the header
 
-**Done when:** clicking through every question highlights the right region, including
-the multi-page and unanswered cases.
+**Done when:** clicking through every question highlights the right region, including the
+multi-page and unanswered cases. — **met, in a browser.** Headless Chrome is driven over
+the DevTools protocol (with the `ws` already in the tree, so nothing new is installed),
+every row is clicked, and the DOM is read back and checked against the API snapshot.
+
+| checked, per click | how |
+| --- | --- |
+| the right boxes appear | drawn `data-region` ids equal the mapped answer's regions, as a set |
+| each box is on the right page | the box's `data-page` ancestor equals the region's `pageIndex` |
+| each box is in the right place | `left/top/width/height` equal `box2dToRect` of the stored box to 0.01% |
+| the region is actually reached | after the smooth scroll, the box's rect intersects the scroller's |
+| exactly one row is selected | `[aria-pressed="true"]` has one entry, and it is the row clicked |
+| unanswered stays empty | zero boxes drawn, and the viewer says so |
+
+All fourteen questions, the two-region answer spanning pages 2–3, the unplaceable `Q14`
+block, both zoom directions, the page readout and Expand All in both directions:
+**every check passes.**
+
+### Decisions taken during the phase
+
+- **Selection and expansion are two things.** The export shows row 2 with the orange
+  border *and* an open feedback block, while row 6 is open without being selected. So the
+  row body selects and highlights, the chevron alone expands, and they are separate
+  buttons rather than one button reading a modifier — which also keeps the markup valid,
+  since a button cannot sit inside a button. Selecting does expand, so one click still
+  shows the mark, the transcript and the highlight together.
+- **The pill's colour is not the stored verdict.** Grading calls 4/5 `partial` because a
+  mark was lost; the design shows 4/5 green, and 80% is the threshold measured off the
+  export. Two scales answering different questions, deliberately not merged — and the pill
+  carries the number and the colour and nothing else, so there is no verdict word beside
+  it to fall out of step with the marks.
+- **A question nobody attempted gets a grey pill, not a red one.** Red at zero is the
+  design's rule for an answer that earned nothing. A blank page earned nothing either, but
+  saying so in the same colour reads as five marks thrown away rather than five marks never
+  attempted. The accessible name spells out the difference: *"Not attempted, worth 2 marks."*
+- **One derivation, one place.** `buildReview` turns the snapshot into rows, targets and
+  regions; the panels hold no lookup logic at all. A question and an unplaceable block are
+  different rows on screen but the same `Target` to the viewer — a tag and a set of regions
+  — so highlighting has no second code path to get wrong.
+- **Selection is held as a key, not as the selected object.** The object is looked up again
+  from the current model on every render, so a poll that replaces the snapshot cannot leave
+  the viewer drawing boxes from a payload the list has already moved on from.
+- **The number badge drops the printed full stop.** The register stores `"6."` and
+  `"11 (a)"` verbatim, because preserving the paper's own numbering is a requirement, and
+  that verbatim string stays the row's accessible name. The trailing stop is typography
+  rather than number, so it comes off in the two places the number is set inside a circle
+  or a tab and the punctuation would read as a smudge.
+- **Only the selected answer is drawn.** The export highlights one region at a time and is
+  right to: a sheet under a dozen boxes at once tells a teacher nothing about which one
+  they just clicked.
+- **Pages are lazy.** Only page 1 is fetched up front; the rest load as the viewer scrolls
+  to them. Scrolling to a box on page 3 still works before that page's bitmap arrives,
+  because the `width`/`height` on the image reserve its aspect ratio and the layout is
+  therefore correct while the pixels are still in flight.
+
+### The finding: zoom was a no-op, and the readout said 150%
+
+The first implementation scaled the pages with the CSS `zoom` property, which reads like
+exactly the right tool. The readout changed, the tab above the highlight got bigger, and
+the handwriting did not move — visible only because the check took a screenshot.
+
+`zoom` resolves percentage widths against the containing block *in the zoomed coordinate
+space*, so a `w-full` column cancels the zoom exactly and only fixed lengths — the text in
+the tab — actually grow. Setting an explicit `width: ${zoom * 100}%` instead fixed nothing
+at first, for a second reason: a flex item shrinks by default, which quietly clamped the
+150% column back to the width of its container. `shrink-0` is what makes the width mean
+what it says.
+
+Both were invisible to every assertion that looked at the boxes, because the boxes are
+percentages of the page and stayed correct throughout. The check now measures the rendered
+width of page 1 before and after: **590px → 885px**, and a wrong mechanism fails loudly.
+
+### Corrections to the measured design tokens
+
+Four values in `DESIGN.md` came from the earlier exports and are wrong for this screen.
+Re-measured against `Question - Answer mapping screen.png` and corrected in `globals.css`:
+
+| token | was | measured |
+| --- | --- | --- |
+| `panel` (behind the question cards) | `#e8e8e8` | `#f3f3f3` |
+| feedback well, chevron button | `subtle` `#f0f0f0` | new `inset` `#f6f6f6` |
+| number badge | `ink` `#2b2b2b` | new `badge` `#555555` |
+| pill backgrounds | `#f2faf1` / `#fff8ee` / `#fff0ec` | `#ecf8ea` / `#fff5e6` / `#ffe9e2` |
+
+### Limitations worth stating
+
+- **A highlight is only as good as the box behind it.** `Q14`'s answer runs to two lines
+  and its stored box covers the first, so the overlay lands short. The UI draws exactly
+  what extraction recorded — the check asserts that to within 0.01% — which makes this an
+  extraction accuracy limit, of the same family as the top-edge miss noted in Phase 5, and
+  not something to paper over in the viewer.
+- **Clicking a region does not select its question.** The reverse mapping would be a nice
+  affordance, and only the selected answer is drawn, so there is nothing on the sheet to
+  click yet.
+- **One viewport.** Every check ran at 1600x1000. Narrow widths are Phase 8's job.
 
 ---
 

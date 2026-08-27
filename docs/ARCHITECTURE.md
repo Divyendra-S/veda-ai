@@ -288,15 +288,24 @@ multi-file, drag and drop. Then rasterization progress per page, then the proces
 ("Extracting… this may take a while") driven by real pipeline stage.
 
 **Page 2 — Review** (`/exams/[id]`)
-- **Left:** question list — number, text, status chip (Answered / Unanswered), marks, feedback
+- **Left:** question list — number badge, part letter, text, score pill; expanding a row
+  reveals the student's transcript and the AI feedback
 - **Right:** answer sheet viewer — continuous page scroll, zoom, highlight overlay
-- Clicking a question scrolls to the right page and animates its highlight
-- Unmatched answers in their own section
+- Clicking a question draws its regions, scrolls the first into view and rings it
+- Unmatched answers in their own section, clickable and highlighting the same way
 - Grading summary in the header
 
-The viewer keeps one absolutely-positioned overlay per page, sized to the rendered image.
-Highlights are `div`s positioned from `box2dToRect`, so zoom is a single CSS transform on the
-container and every highlight follows automatically.
+`buildReview` turns the one snapshot into rows, targets and regions; the panels hold no
+lookup logic. A question and an unplaceable block are different rows on screen but the same
+`Target` — a tag and a set of regions — so highlighting has a single code path. Selection is
+held as a key and re-resolved against the current model each render, so a poll that replaces
+the snapshot cannot leave the viewer drawing boxes from a payload the list has moved past.
+
+Highlights are `div`s positioned from `box2dToRect` against a notional 100x100 page, which
+yields exactly the percentages CSS wants: an overlay then tracks its image at any width with
+no resize observer. Zoom is therefore only the width of the column the pages sit in — not a
+transform and emphatically not the CSS `zoom` property, which cancels against percentage
+widths and silently magnifies nothing (`PLAN.md` Phase 7).
 
 ---
 
